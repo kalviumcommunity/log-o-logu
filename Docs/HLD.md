@@ -1,88 +1,122 @@
-# High-Level Design (HLD): log-o-logu
+# High-Level Design (HLD) - Log-o-logu
 
-**Project Name:** log-o-logu
+## 🟢 R — Requirements
+The system must:
+- Replace manual visitor logs with digital logging
+- Support Pre-Approved QR Guest Invite system
+- Support Service Partner quick-entry validation
+- Provide Admin live dashboard (occupancy tracking)
+- Enable real-time notifications
+- Log entry and exit timestamps automatically
+- Maintain secure, searchable records
+- Ensure privacy and data protection
+- Be scalable for multiple apartments
 
-**Version:** 1.0
+## 🟢 T — Technical Stack
+| Layer | Technology |
+| :--- | :--- |
+| **Frontend** | Flutter (Dart) |
+| **Authentication** | Firebase Auth |
+| **Database** | Firestore |
+| **Backend Logic** | Firebase Cloud Functions |
+| **Notifications** | Firebase Cloud Messaging (FCM) |
+| **QR Handling** | Flutter QR Scanner Library |
+| **Geo-Fencing** | Flutter Geolocator |
+| **UI Design** | Figma |
+| **Maps** | Google Maps SDK |
 
-**Status:** Draft / For Review
+## 🟢 C — Components
 
----
+### 1️⃣ Resident Mobile App
+- Create guest invite
+- Generate QR Code
+- Approve / deny visitors
+- View visitor history
 
-## 1. System Architecture Overview
+### 2️⃣ Guard App
+- Scan QR codes
+- Validate delivery agents
+- View active visitors
+- Manually override entry (admin-only)
 
-The **log-o-logu** system utilizes a **Serverless Mobile Architecture**. It leverages **Flutter** for a cross-platform client experience and **Firebase** as the backend-as-a-service (BaaS) provider.
+### 3️⃣ Admin Dashboard
+- View live occupancy
+- Filter logs
+- Export records
+- Manage residents & guards
 
-The architecture is designed to be reactive; data changes in the cloud (Firestore) are pushed immediately to the client apps, ensuring that Guards and Residents stay in sync without manual refreshes.
+### 4️⃣ Firebase Backend
+- **Firebase Auth**: Role-based authentication (Resident, Guard, Admin).
+- **Firestore Database**: Stores Users, Invites, Logs, Service sessions.
+- **Cloud Functions**: Validate QR, Trigger notifications, Auto-expire invites, Handle exit detection.
+- **Firebase Cloud Messaging**: Push approval requests, Alert suspicious activity.
 
----
+## 🟢 R — Responsibilities (Module Breakdown)
 
-## 2. Major Components & Modules
+### 2️⃣ Module Architecture
+**Mobile App (Flutter)**
+- Authentication Module
+- Invite Module
+- QR Module
+- GeoFence Module
+- Notification Module
 
-### A. The Client App (Flutter)
+**Backend (Firebase)**
+- Auth Service
+- Firestore DB
+- Cloud Functions
+- FCM Service
 
-A single codebase that renders different interfaces based on the user's role:
+**Admin Web Panel**
 
-* **Admin Module:** User management (onboarding/offboarding), master log viewing, and system settings.
-* **Resident Module:** QR code generation, guest list management, and real-time push notification handling.
-* **Guard Module:** High-speed QR scanner interface, manual entry forms, and entry/exit logging.
+### 3️⃣ Detailed Module Description
 
-### B. Backend Services (Firebase)
+#### 🔐 3.1 Authentication Module
+- **Responsibilities**: Register/Login users, Role validation, Token management.
+- **Interfaces**: `FirebaseAuth.signIn()`, `FirebaseAuth.createUser()`.
+- **Edge Cases**: 
+    - Invalid credentials -> Show error.
+    - Expired token -> Auto re-login.
+    - Role mismatch -> Block access.
 
-* **Firebase Auth:** Handles secure identity management.
-* **Cloud Firestore:** NoSQL database for real-time storage of user profiles, invites, and logs.
-* **Firebase Cloud Messaging (FCM):** The "Alert System" that notifies residents the moment a QR is scanned.
-* **Cloud Functions (Optional/Future):** For server-side logic like cleaning up expired QR codes or generating monthly PDF reports.
+#### 🎟 3.2 Guest Invite Module
+- **Responsibilities**: Generate unique invite ID, Generate QR Code, Store invite in Firestore.
+- **Data Structure**: `Invite { inviteId, residentId, guestName, phoneNumber, validFrom, validUntil, status }`.
+- **Flow**: Resident → Create Invite → Firestore → QR Generated → Sent via WhatsApp.
 
----
+#### 📷 3.3 QR Validation Module
+- **Responsibilities**: Scan QR, Send inviteId to Cloud Function, Validate existence/expiry/usage.
+- **Validation Logic**: `if invite.exists AND invite.validUntil > now AND invite.status == Approved: logEntry(); notifyResident(); else: denyEntry();`
 
-## 3. Data Flow and Relationships
+#### 📍 3.4 GeoFence Module (Optional Enhancement)
+- **Responsibilities**: Detect entry within 1KM radius, Auto-log exit when outside boundary.
+- **Libraries**: `geolocator`, `Google Maps SDK`.
 
-### 3.1 The "Pre-Approved" Entry Flow
+#### 🔔 3.5 Notification Module
+- **Uses**: Firebase Cloud Messaging.
+- **Triggers**: Guest arrival, Delivery partner entry, Exit confirmation, Suspicious attempt.
 
-1. **Request:** Resident enters guest details in the app.
-2. **Creation:** A document is created in the `invites` collection with a unique `invite_id`.
-3. **Generation:** The `invite_id` is converted into a QR code on the Resident's device.
-4. **Verification:** The Guard scans the QR. The app queries Firestore for that `invite_id`.
-5. **Validation:** If the status is "Active" and the time is valid, the Guard grants entry.
-6. **Update:** The `invite` status changes to "Used," and an entry is added to `activity_logs`.
+## 📊 4. Data Flow Documentation
 
-### 3.2 Data Relationships (Firestore Schema)
+### 4.1 Guest Entry Flow
+Resident App → Create Invite → Firestore → QR Generated → Visitor shows QR → Guard scans → Cloud Function validates → Entry Log stored → FCM notifies Resident.
 
-* **Users:** Linked to **Invites** via `resident_uid`.
-* **Invites:** Linked to **Activity Logs** via `invite_id`.
-* **Activity Logs:** Linked to **Guards** via `guard_uid` to track who authorized the entry.
+### 4.2 Delivery Partner Flow
+Guard selects "Service Entry" → Capture Name/Order ID → Temporary Session Created → Entry Logged → Exit Scan → Session Closed.
 
----
+### 4.3 Exit Flow (GeoFence Enabled)
+User leaves 1KM radius → GeoFence Trigger → Cloud Function updates exitTime → Session Closed.
 
-## 4. Integration Points & External Dependencies
+## 🚨 6. Edge Case & Failure Handling
+- **Network Failure**: Use local cache, retry sync.
+- **QR Reuse**: Mark as "Used", deny second scan.
+- **Expired Invite**: Deny entry, notify resident.
+- **Multiple Guards**: Use Firestore transaction locking.
+- **Battery Saver**: Fallback to QR-based exit.
 
-* **WhatsApp API (URL Launcher):** Used to share the generated QR code image/link directly from the Resident's app to the Visitor.
-* **QR Scanner/Generator Packages:** Flutter plugins for high-performance scanning (e.g., `mobile_scanner`) and generating (e.g., `qr_flutter`).
-* **Firebase SDK:** Deep integration for real-time data streaming and authentication.
-
----
-
-## 5. Non-Functional Requirements & Constraints
-
-| Category | Requirement |
-| --- | --- |
-| **Performance** | The "5-Second Gate" rule: QR scanning and verification must complete in under 3 seconds. |
-| **Security** | Role-Based Access Control (RBAC) via Firestore Security Rules. Residents cannot see other residents' guests. |
-| **Scalability** | Firebase handles concurrent users, supporting communities from 50 to 5,000+ units. |
-| **Availability** | The system must be "Offline-Ready" for Guards in areas with spotty gate connectivity (caching). |
-| **Constraint** | **No Location Services:** GPS/Geofencing features are excluded from the current MVP and moved to the future roadmap. |
-
----
-
-## 6. Logic Flowchart
-
----
-
-### Acceptance Checklist
-
-* [x] Three distinct roles (Admin, Resident, Guard) defined.
-* [x] QR-based entry logic detailed.
-* [x] Firebase integration points identified.
-* [x] Future-facing location features moved to roadmap.
-
----
+## 🔟 Non-Functional Requirements
+- **Performance**: QR validation < 2 sec.
+- **Availability**: 99.9% uptime.
+- **Scalability**: Support 10,000+ users.
+- **Security**: Encrypted authentication.
+- **Reliability**: No data loss.
