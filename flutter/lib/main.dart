@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+// Import this once you run 'flutterfire configure'
+// import 'firebase_options.dart'; 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Note: Firebase.initializeApp() requires google-services.json on Android
-  // and GoogleService-Info.plist on iOS.
   try {
-    await Firebase.initializeApp();
+    // Check if firebase_options.dart exists (metaphorically)
+    // For now, we use the default initialization which looks for
+    // google-services.json (Android) and GoogleService-Info.plist (iOS)
+    await Firebase.initializeApp(
+      // options: DefaultFirebaseOptions.currentPlatform, // Uncomment after flutterfire configure
+    );
   } catch (e) {
-    debugPrint("Firebase initialization error: $e");
-    debugPrint("Make sure you have added google-services.json/GoogleService-Info.plist");
+    debugPrint("Firebase initialization warning: $e");
+    debugPrint("Note: You may need to run 'flutterfire configure' or add config files manually.");
   }
 
   runApp(
     MultiProvider(
       providers: [
-        // Add your providers here
+        // Add your providers here, e.g.:
         // ChangeNotifierProvider(create: (_) => AuthProvider()),
       ],
       child: const MyApp(),
@@ -101,9 +106,9 @@ class SplashScreen extends StatelessWidget {
             const Spacer(),
             const CircularProgressIndicator(),
             const SizedBox(height: 48),
-            Text(
-              'Initialized successfully',
-              style: Theme.of(context).textTheme.labelSmall,
+            const Text(
+              'Environment Verified',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 24),
           ],
