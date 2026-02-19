@@ -1,65 +1,92 @@
-# log-o-logu: Smart Visitor Management System
+# Log-O-Logu 🛡️
 
-**log-o-logu** is a streamlined, mobile-first solution designed to replace outdated physical visitor logbooks in gated communities. By shifting the responsibility of security from a lone guard to a distributed network of residents, it transforms the entry process into a verified, **5-second digital transaction**.
+Smart Visitor Management System built with **Flutter** & **Firebase**. 
 
-## 🚀 The Core Philosophy
-
-The "Correct" solution to gate security isn't more paperwork—it's **Pre-Approved Digital Verification**.
-
-* **Verification over Decoration:** No more fake names or phone numbers. Every guest is "digitally signed" by a verified resident.
-* **The 5-Second Gate:** QR scanning eliminates the "human bottleneck" of manual handwriting.
-* **Real-Time Accountability:** Searchable digital logs replace dusty, unsearchable notebooks.
-* **Direct Communication:** Instant Firebase Cloud Messaging (FCM) replaces broken intercoms.
-
-## 👥 Role-Based Access Control (RBAC)
-
-| Role | Responsibility | Key Features |
-| --- | --- | --- |
-| **Admin** | System Governance | Onboard/offboard Residents and Guards, view global entry logs. |
-| **Resident** | Personal Security | Generate QR invites, receive arrival alerts, view personal guest history. |
-| **Guard** | Execution | Scan QR codes, log unannounced visitors, trigger emergency alerts. |
-
-## 🛠️ Tech Stack
-
-* **Frontend:** Flutter (Dart)
-* **Backend:** Firebase (Firestore, Authentication, Cloud Functions, Cloud Messaging)
-* **Communication:** WhatsApp API (for QR sharing)
-* **Scanner:** Mobile camera-based QR detection
-
-## 📥 Getting Started
-
-1. **Clone the Repository:**
-```bash
-git clone https://github.com/kalviumcommunity/log-o-logu.git
-
-```
-
-
-2. **Firebase Configuration:**
-* Create a Firebase project at [console.firebase.google.com]().
-* Enable **Email/Password Authentication** and **Cloud Firestore**.
-* Download and add `google-services.json` (Android) or `GoogleService-Info.plist` (iOS) to the respective project folders.
-
-
-3. **Install Dependencies:**
-```bash
-flutter pub get
-
-```
-
-
-4. **Run the App:**
-```bash
-flutter run
-
-```
-
-
-
-## 🛤️ Future Roadmap
-
-* **Geofencing:** Ensure Guards can only scan codes when within the society perimeter.
-* **Location-Based ETA:** Real-time tracking of delivery partners once they enter the gate.
-* **Face Recognition:** Secondary verification for frequent staff and domestic help.
+Digitalizing community security by replacing traditional logbooks with a verified, real-time digital entry system.
 
 ---
+
+## 🚀 Key Features
+- **Instant Digital Entry**: 5-second gate entry via QR scanning.
+- **Pre-Approved Invites**: Residents generate QR codes for guests.
+- **Real-Time Notifications**: Instant alerts for guest arrivals.
+- **Searchable Logs**: Reliable digital trails for all visitors.
+- **Role-Based Access**: Governance for Admins, Guards, and Residents.
+
+---
+
+## 🛠 Prerequisites
+
+Before you begin, ensure you have the following installed:
+- [Flutter (Stable Channel)](https://docs.flutter.dev/get-started/install)
+- [Dart SDK](https://dart.dev/get-dart)
+- [Android Studio](https://developer.android.com/studio) / [VS Code](https://code.visualstudio.com/)
+- [Firebase account](https://console.firebase.google.com/)
+- Android SDK (installed via Android Studio)
+
+---
+
+## 📦 First-Time Setup
+
+### 1️⃣ Clone Repository
+```bash
+git clone <repo-url>
+cd log-o-logu
+```
+
+### 2️⃣ Install Dependencies
+```bash
+flutter pub get
+```
+
+### 3️⃣ Setup Firebase
+1.  Create a project in the [Firebase Console](https://console.firebase.google.com/).
+2.  Register a new **Android app**:
+    - Package name: `com.example.logologu`
+    - Download `google-services.json`.
+    - Place it inside `android/app/`.
+3.  Register a new **iOS app** (Optional):
+    - Download `GoogleService-Info.plist`.
+    - Place it inside `ios/Runner/`.
+
+### 4️⃣ Enable Firebase Services
+In your Firebase Console, enable the following:
+- **Authentication**: Enable Email/Password or Phone.
+- **Cloud Firestore**: Create a database in production or test mode.
+- **Cloud Messaging**: Enable for push notifications.
+
+---
+
+## 🏃 Run Project
+```bash
+flutter run
+```
+
+---
+
+## 🏗 Folder Architecture
+The project follows a **Modular Clean Architecture**:
+```text
+lib/
+ ├── core/          # Constants, global services, and utilities
+ ├── features/      # Feature-specific logic (auth, logs, invite, etc.)
+ ├── shared/        # Reusable widgets and models
+ └── main.dart      # Application entry point
+```
+
+---
+
+## 📦 Build Release APK
+```bash
+flutter build apk --release
+```
+
+---
+
+## 🆘 Known Issues & Support
+- **Gradle mismatch?** Update Android Gradle Plugin in `android/build.gradle`.
+- **Firebase not initialized?** Verify `google-services.json` is in the correct directory.
+- **API level error?** Ensure `compileSdkVersion` is at least 34 in `android/app/build.gradle`.
+
+---
+© 2026 Log-O-Logu Team. Built with ❤️ for safer communities.
