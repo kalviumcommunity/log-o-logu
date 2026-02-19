@@ -1,33 +1,28 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-// Import this once you run 'flutterfire configure'
-// import 'firebase_options.dart'; 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   try {
-    // Check if firebase_options.dart exists (metaphorically)
-    // For now, we use the default initialization which looks for
-    // google-services.json (Android) and GoogleService-Info.plist (iOS)
-    await Firebase.initializeApp(
-      // options: DefaultFirebaseOptions.currentPlatform, // Uncomment after flutterfire configure
-    );
+    // Note: If you want to run on Web, you MUST run 'flutterfire configure' 
+    // to generate firebase_options.dart. 
+    // On Android, it will work automatically if google-services.json is present.
+    if (kIsWeb) {
+      debugPrint("Web platform detected. Ensure you have configured Firebase for Web.");
+      // If we don't have options for web, initializing will crash.
+      // For now, only initialize if not on web, or provide placeholder.
+      // await Firebase.initializeApp(options: ...); 
+    } else {
+      await Firebase.initializeApp();
+    }
   } catch (e) {
-    debugPrint("Firebase initialization warning: $e");
-    debugPrint("Note: You may need to run 'flutterfire configure' or add config files manually.");
+    debugPrint("Firebase Initialization Error: $e");
   }
 
-  runApp(
-    MultiProvider(
-      providers: [
-        // Add your providers here, e.g.:
-        // ChangeNotifierProvider(create: (_) => AuthProvider()),
-      ],
-      child: const MyApp(),
-    ),
-  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -106,9 +101,9 @@ class SplashScreen extends StatelessWidget {
             const Spacer(),
             const CircularProgressIndicator(),
             const SizedBox(height: 48),
-            const Text(
-              'Environment Verified',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            Text(
+              kIsWeb ? 'Firebase (Web Setup Required)' : 'Firebase Connected',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 24),
           ],
