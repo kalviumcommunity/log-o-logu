@@ -18,47 +18,52 @@ Digitalizing community security by replacing traditional logbooks with a verifie
 ## 🛠 Prerequisites
 
 Before you begin, ensure you have the following installed:
-- [Flutter (Stable Channel)](https://docs.flutter.dev/get-started/install)
+- [Flutter (Stable Channel 3.40+)](https://docs.flutter.dev/get-started/install)
 - [Dart SDK](https://dart.dev/get-dart)
 - [Android Studio](https://developer.android.com/studio) / [VS Code](https://code.visualstudio.com/)
-- [Firebase account](https://console.firebase.google.com/)
-- Android SDK (installed via Android Studio)
+- [Firebase Account](https://console.firebase.google.com/)
+- [Node.js & NPM](https://nodejs.org/) (Required for Firebase CLI)
 
 ---
 
-## 📦 First-Time Setup
+## 📦 First-Time Setup (2026 Recommended)
 
-### 1️⃣ Clone Repository
-```bash
-git clone <repo-url>
-cd log-o-logu
-```
+The project core is located in the `/flutter` directory.
 
-### 2️⃣ Install Dependencies
+### 1️⃣ Prepare Environment
 ```bash
+cd flutter
 flutter pub get
 ```
 
-### 3️⃣ Setup Firebase
-1.  Create a project in the [Firebase Console](https://console.firebase.google.com/).
-2.  Register a new **Android app**:
-    - Package name: `com.example.logologu`
-    - Download `google-services.json`.
-    - Place it inside `android/app/`.
-3.  Register a new **iOS app** (Optional):
-    - Download `GoogleService-Info.plist`.
-    - Place it inside `ios/Runner/`.
+### 2️⃣ Activate Firebase CLI
+We recommend using the official CLI to avoid manual JSON management:
+```bash
+# 1. Install Firebase Tools (if not already installed)
+npm install -g firebase-tools
 
-### 4️⃣ Enable Firebase Services
-In your Firebase Console, enable the following:
-- **Authentication**: Enable Email/Password or Phone.
-- **Cloud Firestore**: Create a database in production or test mode.
+# 2. Login to Firebase
+firebase login
+
+# 3. Activate FlutterFire CLI
+dart pub global activate flutterfire_cli
+
+# 4. Configure Firebase inside the flutter directory
+flutterfire configure
+```
+*Note: This will automatically generate `lib/firebase_options.dart` and link your apps.*
+
+### 3️⃣ Enable Firebase Services
+In your Firebase Console, enable:
+- **Authentication**: Email/Password.
+- **Cloud Firestore**: Create a database.
 - **Cloud Messaging**: Enable for push notifications.
 
 ---
 
 ## 🏃 Run Project
 ```bash
+cd flutter
 flutter run
 ```
 
@@ -67,7 +72,7 @@ flutter run
 ## 🏗 Folder Architecture
 The project follows a **Modular Clean Architecture**:
 ```text
-lib/
+flutter/lib/
  ├── core/          # Constants, global services, and utilities
  ├── features/      # Feature-specific logic (auth, logs, invite, etc.)
  ├── shared/        # Reusable widgets and models
@@ -76,17 +81,12 @@ lib/
 
 ---
 
-## 📦 Build Release APK
-```bash
-flutter build apk --release
-```
-
----
-
-## 🆘 Known Issues & Support
-- **Gradle mismatch?** Update Android Gradle Plugin in `android/build.gradle`.
-- **Firebase not initialized?** Verify `google-services.json` is in the correct directory.
-- **API level error?** Ensure `compileSdkVersion` is at least 34 in `android/app/build.gradle`.
+## 🆘 Troubleshooting & Environment Fixes
+If you face the "Failed to start Dart CLI isolate" or Gradle errors:
+1. **Reset Cache**: `flutter clean && rm -rf ~/.dart_tool && flutter pub get`
+2. **Accept Licenses**: `flutter doctor --android-licenses`
+3. **Check SDK Path**: Ensure `android/local.properties` points to a valid Android SDK.
+4. **Update Gradle**: Verify `flutter/android/app/build.gradle` has `compileSdk 34`.
 
 ---
 © 2026 Log-O-Logu Team. Built with ❤️ for safer communities.
