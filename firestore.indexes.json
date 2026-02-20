@@ -1,0 +1,90 @@
+{
+    "indexes": [
+        {
+            "collectionGroup": "logs",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "apartmentId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "entryTime",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "logs",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "residentUid",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "entryTime",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "logs",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "guardUid",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "entryTime",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "invites",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "residentUid",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "validUntil",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "invites",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "residentUid",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                }
+            ]
+        }
+    ],
+    "fieldOverrides": [
+        {
+            "collectionGroup": "logs",
+            "fieldPath": "inviteId",
+            "indexes": [
+                {
+                    "order": "ASCENDING",
+                    "queryScope": "COLLECTION"
+                },
+                {
+                    "order": "DESCENDING",
+                    "queryScope": "COLLECTION"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,99 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ────────────────────────────────────────────────────
+
+    // Returns the calling user's role from their custom auth claims.
+    function role() {
+      return request.auth.token.role;
+    }
+
+    // Shorthand role checks.
+    function isAdmin()    { return role() == 'admin'; }
+    function isGuard()    { return role() == 'guard'; }
+    function isResident() { return role() == 'resident'; }
+
+    // True when the document belongs to the signed-in user.
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // ─── /users ──────────────────────────────────────────────────────────────
+    // Schema:
+    //   uid, name, email, phone, role, apartmentId, fcmToken
+    match /users/{userId} {
+      // Users can read and update their own profile.
+      // Admins can read any profile.
+      allow read:   if isOwner(userId) || isAdmin();
+
+      // Self-write allowed so a freshly registered user can store their profile.
+      // Admins may also create/update any user document.
+      allow write:  if isOwner(userId) || isAdmin();
+    }
+
+    // ─── /apartments ─────────────────────────────────────────────────────────
+    // Schema:
+    //   id, name, address, location (GeoPoint)
+    match /apartments/{apartmentId} {
+      // All authenticated users can read apartment info (needed UI-wide).
+      allow read:  if request.auth != null;
+
+      // Only admins may create / update / delete apartment records.
+      allow write: if isAdmin();
+    }
+
+    // ─── /invites ────────────────────────────────────────────────────────────
+    // Schema:
+    //   inviteId, residentUid, guestName, guestPhone,
+    //   validFrom (timestamp), validUntil (timestamp),
+    //   status (pending|active|expired|used), type (one-time|recurring)
+    match /invites/{inviteId} {
+      // Residents can read and write only their own invites.
+      allow read:   if (isResident() && resource.data.residentUid == request.auth.uid)
+                    || isGuard()
+                    || isAdmin();
+
+      // A resident can create an invite only for themselves.
+      allow create: if isResident()
+                    && request.resource.data.residentUid == request.auth.uid;
+
+      // A resident can update / delete only their own invites.
+      // Guards may update status (e.g. mark used) but cannot create invites.
+      allow update: if (isResident() && resource.data.residentUid == request.auth.uid)
+                    || isGuard()
+                    || isAdmin();
+
+      allow delete: if (isResident() && resource.data.residentUid == request.auth.uid)
+                    || isAdmin();
+    }
+
+    // ─── /logs ───────────────────────────────────────────────────────────────
+    // Schema:
+    //   logId, inviteId, residentUid, guardUid,
+    //   entryTime (timestamp), exitTime (timestamp),
+    //   status (entered|exited|denied)
+    match /logs/{logId} {
+      // Guards can read their own log entries.
+      // Residents can read logs tied to their uid (for history).
+      // Admins can read all logs.
+      allow read:   if (isGuard()    && resource.data.guardUid    == request.auth.uid)
+                    || (isResident() && resource.data.residentUid == request.auth.uid)
+                    || isAdmin();
+
+      // Only guards may create a log entry.
+      allow create: if isGuard()
+                    && request.resource.data.guardUid == request.auth.uid;
+
+      // Guards may update their own log (e.g. add exitTime).
+      // Admins may update any log.
+      allow update: if (isGuard() && resource.data.guardUid == request.auth.uid)
+                    || isAdmin();
+
+      // Only admins may delete log records.
+      allow delete: if isAdmin();
+    }
+
+  }
+}
