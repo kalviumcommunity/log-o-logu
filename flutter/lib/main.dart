@@ -1,28 +1,40 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:log_o_logu/features/auth/domain/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
-    // Note: If you want to run on Web, you MUST run 'flutterfire configure' 
-    // to generate firebase_options.dart. 
-    // On Android, it will work automatically if google-services.json is present.
-    if (kIsWeb) {
-      debugPrint("Web platform detected. Ensure you have configured Firebase for Web.");
-      // If we don't have options for web, initializing will crash.
-      // For now, only initialize if not on web, or provide placeholder.
-      // await Firebase.initializeApp(options: ...); 
-    } else {
+    // Web requires `flutterfire configure` to emit firebase_options.dart.
+    // Android uses google-services.json automatically.
+    if (!kIsWeb) {
       await Firebase.initializeApp();
+
+      // Forward all Flutter framework errors to Crashlytics.
+      FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+      // Forward uncaught async errors (Zone errors) to Crashlytics.
+      PlatformDispatcher.instance.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
+    } else {
+      debugPrint('[main] Web platform — Firebase Web setup required.');
     }
   } catch (e) {
-    debugPrint("Firebase Initialization Error: $e");
+    debugPrint('[main] Firebase init error: $e');
   }
 
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AuthService(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -47,6 +59,7 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+      // TODO(routing): replace with GoRouter that reacts to AuthService.status
       home: const SplashScreen(),
     );
   }
@@ -101,9 +114,9 @@ class SplashScreen extends StatelessWidget {
             const Spacer(),
             const CircularProgressIndicator(),
             const SizedBox(height: 48),
-            Text(
-              kIsWeb ? 'Firebase (Web Setup Required)' : 'Firebase Connected',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            const Text(
+              'Firebase Connected',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 24),
           ],
