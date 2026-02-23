@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:log_o_logu/core/router/app_router.dart';
 import 'package:log_o_logu/core/theme/app_theme.dart';
 import 'package:log_o_logu/features/auth/domain/auth_service.dart';
+import 'package:log_o_logu/features/invite/domain/invite_service.dart';
 import 'package:log_o_logu/firebase_options.dart';
 
 void main() async {
@@ -29,8 +30,11 @@ void main() async {
   }
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthService(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthService()),
+        ChangeNotifierProvider(create: (_) => InviteService()),
+      ],
       child: const MyApp(),
     ),
   );
