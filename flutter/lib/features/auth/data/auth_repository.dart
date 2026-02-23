@@ -51,9 +51,31 @@ class AuthRepository {
       if (firebaseUser == null) return null;
 
       try {
+        // 1️⃣ Try to fetch fresh profile from Firestore server.
         return await _fetchProfile(firebaseUser.uid);
       } on AuthException {
         // Profile not yet created (e.g. mid-signup race) — return null.
+        return null;
+      } on FirebaseException catch (e) {
+        if (e.code == 'unavailable') {
+          // 2️⃣ Firestore is offline — try the local cache first.
+          debugPrint('[AuthRepository] Firestore offline, falling back to cache.');
+          try {
+            return await _fetchProfile(firebaseUser.uid, preferCache: true);
+          } catch (_) {
+            // 3️⃣ No cache either — build a minimal UserModel from the Auth
+            //    token so the user is not kicked back to the login screen.
+            debugPrint('[AuthRepository] No cache. Building fallback UserModel from Auth token.');
+            return UserModel(
+              uid: firebaseUser.uid,
+              name: firebaseUser.displayName ?? '',
+              email: firebaseUser.email ?? '',
+              phone: firebaseUser.phoneNumber ?? '',
+              role: UserRole.resident,
+            );
+          }
+        }
+        debugPrint('[AuthRepository] authStateStream FirebaseException: $e');
         return null;
       } catch (e) {
         debugPrint('[AuthRepository] authStateStream error: $e');
@@ -187,8 +209,13 @@ class AuthRepository {
   // ─── Private Helpers ─────────────────────────────────────────────────────
 
   /// Reads the Firestore profile document for [uid].
-  Future<UserModel> _fetchProfile(String uid) async {
-    final snapshot = await _userDocRef(uid).get();
+  ///
+  /// If [preferCache] is true, reads from local Firestore cache rather than
+  /// the remote server. Used as a fallback when the device is offline.
+  Future<UserModel> _fetchProfile(String uid, {bool preferCache = false}) async {
+    final snapshot = await _userDocRef(uid).get(
+      preferCache ? const GetOptions(source: Source.cache) : null,
+    );
     if (!snapshot.exists || snapshot.data() == null) {
       throw const ProfileNotFoundException();
     }

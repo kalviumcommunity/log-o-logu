@@ -3,27 +3,26 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:log_o_logu/core/theme/app_theme.dart';
 import 'package:log_o_logu/features/auth/domain/auth_service.dart';
+import 'package:log_o_logu/features/auth/presentation/login_screen.dart';
+import 'package:log_o_logu/features/home/presentation/home_screen.dart';
+import 'package:log_o_logu/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    // Web requires `flutterfire configure` to emit firebase_options.dart.
-    // Android uses google-services.json automatically.
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
     if (!kIsWeb) {
-      await Firebase.initializeApp();
-
-      // Forward all Flutter framework errors to Crashlytics.
       FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
-
-      // Forward uncaught async errors (Zone errors) to Crashlytics.
       PlatformDispatcher.instance.onError = (error, stack) {
         FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
         return true;
       };
-    } else {
-      debugPrint('[main] Web platform — Firebase Web setup required.');
     }
   } catch (e) {
     debugPrint('[main] Firebase init error: $e');
@@ -45,23 +44,27 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Log-O-Logu',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6750A4),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFD0BCFF),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      // TODO(routing): replace with GoRouter that reacts to AuthService.status
-      home: const SplashScreen(),
+      theme: AppTheme.light,
+      home: const AuthWrapper(),
     );
+  }
+}
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = context.watch<AuthService>().status;
+
+    switch (status) {
+      case AuthStatus.initializing:
+        return const SplashScreen();
+      case AuthStatus.authenticated:
+        return const HomeScreen();
+      case AuthStatus.unauthenticated:
+        return const LoginScreen();
+    }
   }
 }
 
@@ -78,7 +81,7 @@ class SplashScreen extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Theme.of(context).colorScheme.primaryContainer,
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
               Theme.of(context).colorScheme.surface,
             ],
           ),
@@ -92,7 +95,7 @@ class SplashScreen extends StatelessWidget {
               child: Icon(
                 Icons.domain_verification_rounded,
                 size: 100,
-                color: Color(0xFF6750A4),
+                color: Colors.black,
               ),
             ),
             const SizedBox(height: 24),
@@ -100,19 +103,18 @@ class SplashScreen extends StatelessWidget {
               'Log-O-Logu',
               style: Theme.of(context).textTheme.displaySmall?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onSurface,
                   ),
             ),
             const SizedBox(height: 8),
             Text(
               'Digitalizing Security. Simplifying Access.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.secondary,
+                    color: Colors.grey[600],
                     letterSpacing: 1.2,
                   ),
             ),
             const Spacer(),
-            const CircularProgressIndicator(),
+            const CircularProgressIndicator(color: Colors.black),
             const SizedBox(height: 48),
             const Text(
               'Firebase Connected',
