@@ -18,6 +18,8 @@ import 'package:log_o_logu/features/auth/presentation/register_screen.dart';
 import 'package:log_o_logu/features/home/presentation/resident_home_screen.dart';
 import 'package:log_o_logu/features/home/presentation/guard_home_screen.dart';
 import 'package:log_o_logu/features/admin/presentation/admin_dashboard_screen.dart';
+import 'package:log_o_logu/features/invite/presentation/create_invite_screen.dart';
+import 'package:log_o_logu/features/invite/presentation/visitor_history_screen.dart';
 import 'package:log_o_logu/core/presentation/error_screen.dart';
 
 // ─── Route name constants ────────────────────────────────────────────────────
@@ -29,6 +31,8 @@ class AppRoutes {
   static const resident  = '/resident';
   static const guard     = '/guard';
   static const admin     = '/admin';
+  static const createInvite = '/create-invite';
+  static const visitorHistory = '/history';
   static const error     = '/error';
 
   /// Returns the home path for a given [UserRole].
@@ -118,6 +122,14 @@ GoRouter createAppRouter(AuthService authService) {
       GoRoute(
         path: AppRoutes.admin,
         builder: (context, state) => const AdminDashboardScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.createInvite,
+        builder: (context, state) => const CreateInviteScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.visitorHistory,
+        builder: (context, state) => const VisitorHistoryScreen(),
       ),
 
       // Error fallback
