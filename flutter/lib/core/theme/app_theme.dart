@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const Color primaryBlack = Color(0xFF000000);
+  static const Color primaryBlue = Color(0xFF2563EB);
+  static const Color primaryBlack = Color(0xFF0F172A);
   static const Color primaryWhite = Color(0xFFFFFFFF);
-  static const Color greyText = Color(0xFF757575);
-  static const Color errorRed = Color(0xFFB00020);
+  static const Color greyText = Color(0xFF64748B);
+  static const Color errorRed = Color(0xFFEF4444);
+  static const Color scaffoldBg = Color(0xFFF8FAFC);
 
   static ThemeData get light {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      primaryColor: primaryBlack,
-      scaffoldBackgroundColor: primaryWhite,
+      primaryColor: primaryBlue,
+      scaffoldBackgroundColor: scaffoldBg,
       colorScheme: const ColorScheme.light(
-        primary: primaryBlack,
+        primary: primaryBlue,
         onPrimary: primaryWhite,
-        secondary: primaryBlack,
+        secondary: primaryBlue,
         onSecondary: primaryWhite,
         surface: primaryWhite,
         onSurface: primaryBlack,
@@ -24,9 +26,10 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primaryBlack,
+          backgroundColor: primaryBlue,
           foregroundColor: primaryWhite,
           minimumSize: const Size(double.infinity, 56),
+          elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -42,15 +45,15 @@ class AppTheme {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: primaryBlack),
+          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: primaryBlack.withValues(alpha: 0.2)),
+          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: primaryBlack, width: 2),
+          borderSide: const BorderSide(color: primaryBlue, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
