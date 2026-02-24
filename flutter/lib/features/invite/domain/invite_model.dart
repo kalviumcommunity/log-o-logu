@@ -100,4 +100,14 @@ class InviteModel {
       type: type ?? this.type,
     );
   }
+  bool get isValid {
+    final now = DateTime.now();
+    return status == InviteStatus.pending &&
+        now.isAfter(validFrom) &&
+        now.isBefore(validUntil);
+  }
+
+  bool get isExpired {
+    return status == InviteStatus.expired || DateTime.now().isAfter(validUntil);
+  }
 }
