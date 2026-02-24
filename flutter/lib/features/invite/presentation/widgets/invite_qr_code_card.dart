@@ -1,17 +1,69 @@
 // lib/features/invite/presentation/widgets/invite_qr_code_card.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:log_o_logu/features/invite/domain/invite_model.dart';
 import 'package:log_o_logu/core/theme/app_theme.dart';
+import 'package:intl/intl.dart';
 
-class InviteQRCodeCard extends StatelessWidget {
+class InviteQRCodeCard extends StatefulWidget {
   final InviteModel invite;
 
   const InviteQRCodeCard({super.key, required this.invite});
 
   @override
+  State<InviteQRCodeCard> createState() => _InviteQRCodeCardState();
+}
+
+class _InviteQRCodeCardState extends State<InviteQRCodeCard> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Update UI every second to reflect remaining time / expiry
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _getTimeRemaining() {
+    final now = DateTime.now();
+    if (now.isAfter(widget.invite.validUntil)) {
+       return 'Expired';
+    }
+    if (now.isBefore(widget.invite.validFrom)) {
+      final diff = widget.invite.validFrom.difference(now);
+      return 'Starts in ${_formatDuration(diff)}';
+    }
+    final diff = widget.invite.validUntil.difference(now);
+    return 'Expires in ${_formatDuration(diff)}';
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    if (duration.inHours > 0) {
+      return "${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
+    }
+    return "$twoDigitMinutes:$twoDigitSeconds";
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isExpired = widget.invite.isExpired;
+    final isValid = widget.invite.isValid;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -55,7 +107,7 @@ class InviteQRCodeCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        invite.guestName,
+                        widget.invite.guestName,
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -68,21 +120,46 @@ class InviteQRCodeCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
+                    color: isExpired 
+                        ? Colors.red.withValues(alpha: 0.1)
+                        : isValid
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
+                    border: Border.all(
+                        color: isExpired 
+                            ? Colors.red.withValues(alpha: 0.2)
+                            : isValid
+                                ? Colors.green.withValues(alpha: 0.2)
+                                : Colors.orange.withValues(alpha: 0.2)),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.circle, size: 8, color: Colors.green),
-                      SizedBox(width: 6),
+                      Icon(
+                        Icons.circle, 
+                        size: 8, 
+                        color: isExpired 
+                            ? Colors.red 
+                            : isValid 
+                                ? Colors.green 
+                                : Colors.orange,
+                      ),
+                      const SizedBox(width: 6),
                       Text(
-                        'VALID',
+                        isExpired 
+                            ? 'EXPIRED' 
+                            : isValid 
+                                ? 'VALID' 
+                                : widget.invite.status.name.toUpperCase(),
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: Colors.green,
+                          color: isExpired 
+                              ? Colors.red 
+                              : isValid 
+                                  ? Colors.green 
+                                  : Colors.orange,
                         ),
                       ),
                     ],
@@ -94,9 +171,22 @@ class InviteQRCodeCard extends StatelessWidget {
           
           const Divider(height: 1),
           
+          // Expiry / Countdown logic
+          Padding(
+            padding: const EdgeInsets.only(top: 20.0),
+            child: Text(
+              _getTimeRemaining(),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isExpired ? Colors.red : AppTheme.primaryBlue,
+              ),
+            ),
+          ),
+          
           // QR Code Section
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40.0),
+            padding: const EdgeInsets.only(top: 20.0, bottom: 40.0),
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -109,20 +199,41 @@ class InviteQRCodeCard extends StatelessWidget {
                   ),
                 ),
                 // The actual QR
-                Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(12),
-                  child: QrImageView(
-                    data: invite.inviteId,
-                    version: QrVersions.auto,
-                    size: 180.0,
+                Opacity(
+                  opacity: isExpired ? 0.1 : 1.0,
+                  child: Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(12),
+                    child: QrImageView(
+                      data: widget.invite.inviteId,
+                      version: QrVersions.auto,
+                      size: 180.0,
+                    ),
                   ),
                 ),
+                if (isExpired)
+                  const Text(
+                    'QR EXPIRED',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
               ],
             ),
           ),
           
-          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24.0),
+            child: Text(
+              'Valid until ${DateFormat('MMM dd, hh:mm a').format(widget.invite.validUntil)}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppTheme.greyText,
+              ),
+            ),
+          ),
         ],
       ),
     );

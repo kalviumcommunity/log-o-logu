@@ -40,34 +40,30 @@ class VisitorHistoryScreen extends StatelessWidget {
           // Search Bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-            child: TextField(
+            child: const TextField(
               decoration: InputDecoration(
                 hintText: 'Search by name...',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: const Icon(Icons.filter_list_rounded, size: 20),
+                prefixIcon: Icon(Icons.search, size: 20),
+                suffixIcon: Icon(Icons.filter_list_rounded, size: 20),
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: EdgeInsets.zero,
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
-                ),
               ),
             ),
           ),
           
           // Filter Chips
-          SingleChildScrollView(
+          const SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+            padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
             child: Row(
               children: [
                 _FilterChip(label: 'All Status', isSelected: true),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 _FilterChip(label: 'Completed', isSelected: false),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 _FilterChip(label: 'Today', isSelected: false),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 _FilterChip(label: 'This Week', isSelected: false),
               ],
             ),

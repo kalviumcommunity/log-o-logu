@@ -125,11 +125,11 @@ class _InviteQRScreenState extends State<InviteQRScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: ElevatedButton.icon(
-            onPressed: _sharePass,
+            onPressed: widget.invite.isExpired ? null : _sharePass,
             icon: const Icon(Icons.share, size: 20),
-            label: const Text('Share Pass'),
+            label: Text(widget.invite.isExpired ? 'Invite Expired' : 'Share Pass'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryBlue,
+              backgroundColor: widget.invite.isExpired ? Colors.grey : AppTheme.primaryBlue,
               foregroundColor: Colors.white,
               minimumSize: const Size(double.infinity, 56),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

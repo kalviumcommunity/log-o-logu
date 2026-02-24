@@ -57,11 +57,15 @@ service cloud.firestore {
 
       // A resident can create an invite only for themselves.
       allow create: if isResident()
-                    && request.resource.data.residentUid == request.auth.uid;
+                    && request.resource.data.residentUid == request.auth.uid
+                    && request.resource.data.validFrom >= request.time - duration.value(5, 'm')
+                    && request.resource.data.validUntil > request.resource.data.validFrom;
 
       // A resident can update / delete only their own invites.
-      // Guards may update status (e.g. mark used) but cannot create invites.
-      allow update: if (isResident() && resource.data.residentUid == request.auth.uid)
+      // We restrict them from changing the validity window after creation to prevent tampering.
+      allow update: if (isResident() && resource.data.residentUid == request.auth.uid
+                         && request.resource.data.validFrom == resource.data.validFrom
+                         && request.resource.data.validUntil == resource.data.validUntil)
                     || isGuard()
                     || isAdmin();
 
