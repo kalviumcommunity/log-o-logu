@@ -33,4 +33,13 @@ class InviteRepository {
             .map((doc) => InviteModel.fromMap(doc.data()))
             .toList());
   }
+
+  Stream<List<InviteModel>> streamPendingInvites() {
+    return _invitesCollection
+        .where('status', isEqualTo: InviteStatus.pending.value)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => InviteModel.fromMap(doc.data()))
+            .toList());
+  }
 }

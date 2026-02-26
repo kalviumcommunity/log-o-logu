@@ -16,7 +16,7 @@ import 'package:log_o_logu/features/auth/domain/user_model.dart';
 import 'package:log_o_logu/features/auth/presentation/login_screen.dart';
 import 'package:log_o_logu/features/auth/presentation/register_screen.dart';
 import 'package:log_o_logu/features/home/presentation/resident_home_screen.dart';
-import 'package:log_o_logu/features/home/presentation/guard_home_screen.dart';
+import 'package:log_o_logu/features/home/presentation/guard/guard_shell.dart';
 import 'package:log_o_logu/features/admin/presentation/admin_dashboard_screen.dart';
 import 'package:log_o_logu/features/invite/presentation/create_invite_screen.dart';
 import 'package:log_o_logu/features/invite/presentation/visitor_history_screen.dart';
@@ -25,22 +25,25 @@ import 'package:log_o_logu/core/presentation/error_screen.dart';
 // ─── Route name constants ────────────────────────────────────────────────────
 
 class AppRoutes {
-  static const splash    = '/';
-  static const login     = '/login';
-  static const register  = '/register';
-  static const resident  = '/resident';
-  static const guard     = '/guard';
-  static const admin     = '/admin';
+  static const splash = '/';
+  static const login = '/login';
+  static const register = '/register';
+  static const resident = '/resident';
+  static const guard = '/guard';
+  static const admin = '/admin';
   static const createInvite = '/create-invite';
   static const visitorHistory = '/history';
-  static const error     = '/error';
+  static const error = '/error';
 
   /// Returns the home path for a given [UserRole].
   static String homeFor(UserRole role) {
     switch (role) {
-      case UserRole.resident: return resident;
-      case UserRole.guard:    return guard;
-      case UserRole.admin:    return admin;
+      case UserRole.resident:
+        return resident;
+      case UserRole.guard:
+        return guard;
+      case UserRole.admin:
+        return admin;
     }
   }
 }
@@ -52,16 +55,15 @@ GoRouter createAppRouter(AuthService authService) {
     initialLocation: AppRoutes.splash,
     refreshListenable: authService,
     redirect: (BuildContext context, GoRouterState state) {
-      final status  = authService.status;
-      final user    = authService.currentUser;
-      final loc     = state.matchedLocation;
+      final status = authService.status;
+      final user = authService.currentUser;
+      final loc = state.matchedLocation;
 
       // ── 1. Still initializing — show splash, no redirect yet ─────────────
       if (status == AuthStatus.initializing) return null;
 
       final isAuthenticated = status == AuthStatus.authenticated;
-      final isOnAuthPage =
-          loc == AppRoutes.login || loc == AppRoutes.register;
+      final isOnAuthPage = loc == AppRoutes.login || loc == AppRoutes.register;
 
       // ── 2. Unauthenticated → always send to login ────────────────────────
       if (!isAuthenticated) {
@@ -117,7 +119,7 @@ GoRouter createAppRouter(AuthService authService) {
       ),
       GoRoute(
         path: AppRoutes.guard,
-        builder: (context, state) => const GuardHomeScreen(),
+        builder: (context, state) => const GuardShell(),
       ),
       GoRoute(
         path: AppRoutes.admin,

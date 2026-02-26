@@ -70,6 +70,16 @@ class InviteService extends ChangeNotifier {
     return _repository.streamResidentInvites(residentUid);
   }
 
+  /// Streams pending invites for guard queue and validation workflows.
+  Stream<List<InviteModel>> streamPendingInvites() {
+    return _repository.streamPendingInvites();
+  }
+
+  /// Fetches invite details by invite ID for guard validation.
+  Future<InviteModel?> getInviteById(String inviteId) {
+    return _repository.getInvite(inviteId);
+  }
+
   void clearError() {
     _setError(null);
   }
