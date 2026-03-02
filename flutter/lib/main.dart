@@ -8,6 +8,8 @@ import 'package:log_o_logu/core/router/app_router.dart';
 import 'package:log_o_logu/core/theme/app_theme.dart';
 import 'package:log_o_logu/features/auth/domain/auth_service.dart';
 import 'package:log_o_logu/features/invite/domain/invite_service.dart';
+import 'package:log_o_logu/features/admin/data/admin_repository.dart';
+import 'package:log_o_logu/features/admin/domain/admin_service.dart';
 import 'package:log_o_logu/firebase_options.dart';
 
 void main() async {
@@ -41,6 +43,12 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => InviteService()),
+        Provider(create: (_) => AdminRepository()),
+        ChangeNotifierProxyProvider<AdminRepository, AdminService>(
+          create: (_) => AdminService(repository: AdminRepository()),
+          update: (_, repo, service) =>
+              service ?? AdminService(repository: repo),
+        ),
       ],
       child: const MyApp(),
     ),

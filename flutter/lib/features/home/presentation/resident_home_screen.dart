@@ -28,14 +28,15 @@ class ResidentHomeScreen extends StatelessWidget {
               // Header
               Row(
                 children: [
-                   Container(
+                  Container(
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
                       color: AppTheme.primaryBlue.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person, color: AppTheme.primaryBlue),
+                    child:
+                        const Icon(Icons.person, color: AppTheme.primaryBlue),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -63,7 +64,8 @@ class ResidentHomeScreen extends StatelessWidget {
                   Stack(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.notifications_none_outlined, size: 28),
+                        icon: const Icon(Icons.notifications_none_outlined,
+                            size: 28),
                         onPressed: () {},
                       ),
                       Positioned(
@@ -80,10 +82,15 @@ class ResidentHomeScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.logout, size: 28),
+                    tooltip: 'Logout',
+                    onPressed: () => context.read<AuthService>().signOut(),
+                  ),
                 ],
               ),
               const SizedBox(height: 24),
-              
+
               // Stats Cards
               Row(
                 children: [
@@ -125,13 +132,16 @@ class ResidentHomeScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              
+
               // Horizontal List of Invites
               StreamBuilder<List<InviteModel>>(
                 stream: inviteService.streamResidentInvites(user?.uid ?? ''),
                 builder: (context, snapshot) {
-                  final invites = snapshot.data?.where((i) => i.status == InviteStatus.pending).toList() ?? [];
-                  
+                  final invites = snapshot.data
+                          ?.where((i) => i.status == InviteStatus.pending)
+                          .toList() ??
+                      [];
+
                   if (invites.isEmpty) {
                     return Container(
                       height: 160,
@@ -139,7 +149,8 @@ class ResidentHomeScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                        border: Border.all(
+                            color: Colors.grey.withValues(alpha: 0.2)),
                       ),
                       child: const Center(
                         child: Text(
@@ -184,7 +195,7 @@ class ResidentHomeScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              
+
               const _VisitorListItem(
                 name: 'Sarah Smith',
                 details: 'Entry: Today, 10:15 AM',
@@ -232,9 +243,12 @@ class ResidentHomeScreen extends StatelessWidget {
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.group_outlined), label: 'Directory'),
-          BottomNavigationBarItem(icon: Icon(Icons.history_outlined), label: 'History'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.group_outlined), label: 'Directory'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.history_outlined), label: 'History'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline), label: 'Profile'),
         ],
       ),
     );
@@ -246,7 +260,8 @@ class _StatCard extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _StatCard({required this.label, required this.value, required this.color});
+  const _StatCard(
+      {required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -360,7 +375,8 @@ class _InviteCard extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () {},
               style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
                 padding: EdgeInsets.zero,
               ),
               child: const Row(
@@ -419,7 +435,8 @@ class _VisitorListItem extends StatelessWidget {
                 ),
                 Text(
                   details,
-                  style: const TextStyle(fontSize: 12, color: AppTheme.greyText),
+                  style:
+                      const TextStyle(fontSize: 12, color: AppTheme.greyText),
                 ),
               ],
             ),

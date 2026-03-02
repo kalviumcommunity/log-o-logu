@@ -1,15 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:log_o_logu/features/admin/domain/admin_service.dart';
 import '../cards/overview_card.dart';
 import '../cards/wide_card.dart';
 import '../cards/management_menu_item.dart';
 
-class HomeContent extends StatelessWidget {
+class HomeContent extends StatefulWidget {
   final ValueChanged<String> onFeatureTap;
 
   const HomeContent({
     super.key,
     required this.onFeatureTap,
   });
+
+  @override
+  State<HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<HomeContent> {
+  @override
+  void initState() {
+    super.initState();
+    // Initialize metrics stream on load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminService>().initMetrics();
+    });
+  }
 
   void _showFeatureSnackbar(BuildContext context, String featureName) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -23,6 +39,10 @@ class HomeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final adminService = context.watch<AdminService>();
+    final metrics = adminService.metrics;
+    final isLoading = adminService.isLoading;
+
     return ScrollConfiguration(
       behavior: ScrollBehavior().copyWith(scrollbars: false),
       child: SingleChildScrollView(
@@ -32,13 +52,24 @@ class HomeContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Overview Section
-              const Text(
-                'Overview',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Overview',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  if (isLoading)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
               ),
               const SizedBox(height: 16),
 
@@ -54,40 +85,40 @@ class HomeContent extends StatelessWidget {
                     icon: Icons.people_outline,
                     iconColor: Colors.blue,
                     title: 'Total Residents',
-                    value: '452',
+                    value: metrics.totalResidents.toString(),
                     onTap: () {
                       _showFeatureSnackbar(context, 'Total Residents');
-                      onFeatureTap('Total Residents');
+                      widget.onFeatureTap('Total Residents');
                     },
                   ),
                   OverviewCard(
                     icon: Icons.check_circle_outline,
                     iconColor: Colors.orange,
                     title: 'Pending Approvals',
-                    value: '12',
+                    value: metrics.pendingApprovals.toString(),
                     onTap: () {
                       _showFeatureSnackbar(context, 'Pending Approvals');
-                      onFeatureTap('Pending Approvals');
+                      widget.onFeatureTap('Pending Approvals');
                     },
                   ),
                   OverviewCard(
                     icon: Icons.directions_walk_outlined,
                     iconColor: Colors.teal,
                     title: 'Visitors Today',
-                    value: '84',
+                    value: metrics.visitorsToday.toString(),
                     onTap: () {
                       _showFeatureSnackbar(context, 'Visitors Today');
-                      onFeatureTap('Visitors Today');
+                      widget.onFeatureTap('Visitors Today');
                     },
                   ),
                   OverviewCard(
                     icon: Icons.location_on_outlined,
                     iconColor: Colors.green,
                     title: 'Currently Inside',
-                    value: '18',
+                    value: metrics.currentlyInside.toString(),
                     onTap: () {
                       _showFeatureSnackbar(context, 'Currently Inside');
-                      onFeatureTap('Currently Inside');
+                      widget.onFeatureTap('Currently Inside');
                     },
                   ),
                 ],
@@ -100,11 +131,11 @@ class HomeContent extends StatelessWidget {
                 icon: Icons.security_outlined,
                 title: 'Security Guards',
                 subtitle: 'Active on duty',
-                value: '6',
+                value: metrics.totalGuards.toString(),
                 color: Colors.grey,
                 onTap: () {
                   _showFeatureSnackbar(context, 'Security Guards');
-                  onFeatureTap('Security Guards');
+                  widget.onFeatureTap('Security Guards');
                 },
               ),
 
@@ -127,7 +158,7 @@ class HomeContent extends StatelessWidget {
                 title: 'Resident Management',
                 onTap: () {
                   _showFeatureSnackbar(context, 'Resident Management');
-                  onFeatureTap('Resident Management');
+                  widget.onFeatureTap('Resident Management');
                 },
               ),
               ManagementMenuItem(
@@ -135,18 +166,18 @@ class HomeContent extends StatelessWidget {
                 title: 'Visitor Logs',
                 onTap: () {
                   _showFeatureSnackbar(context, 'Visitor Logs');
-                  onFeatureTap('Visitor Logs');
+                  widget.onFeatureTap('Visitor Logs');
                 },
               ),
               ManagementMenuItem(
                 icon: Icons.done_outline,
                 title: 'Pending Approvals',
-                showBadge: true,
+                showBadge: metrics.pendingApprovals > 0,
                 badgeLabel: 'New',
-                badgeCount: '12',
+                badgeCount: metrics.pendingApprovals.toString(),
                 onTap: () {
                   _showFeatureSnackbar(context, 'Pending Approvals');
-                  onFeatureTap('Pending Approvals');
+                  widget.onFeatureTap('Pending Approvals');
                 },
               ),
               ManagementMenuItem(
@@ -154,7 +185,7 @@ class HomeContent extends StatelessWidget {
                 title: 'Security Management',
                 onTap: () {
                   _showFeatureSnackbar(context, 'Security Management');
-                  onFeatureTap('Security Management');
+                  widget.onFeatureTap('Security Management');
                 },
               ),
               ManagementMenuItem(
@@ -162,7 +193,7 @@ class HomeContent extends StatelessWidget {
                 title: 'Reports',
                 onTap: () {
                   _showFeatureSnackbar(context, 'Reports');
-                  onFeatureTap('Reports');
+                  widget.onFeatureTap('Reports');
                 },
               ),
 

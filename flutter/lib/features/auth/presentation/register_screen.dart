@@ -197,12 +197,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         value: _selectedRole,
                         isExpanded: true,
                         underline: const SizedBox.shrink(),
-                        items: [UserRole.resident, UserRole.guard]
-                            .map((role) => DropdownMenuItem(
-                                  value: role,
-                                  child: Text(role.label),
-                                ))
-                            .toList(),
+                        items:
+                            [UserRole.resident, UserRole.guard, UserRole.admin]
+                                .map((role) => DropdownMenuItem(
+                                      value: role,
+                                      child: Text(role.label),
+                                    ))
+                                .toList(),
                         onChanged: (val) {
                           if (val != null) {
                             setState(() => _selectedRole = val);
