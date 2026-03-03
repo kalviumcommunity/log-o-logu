@@ -17,6 +17,9 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:log_o_logu/features/auth/domain/apartment_model.dart';
 import 'package:log_o_logu/features/auth/domain/auth_exception.dart';
 import 'package:log_o_logu/features/auth/domain/user_model.dart';
 
@@ -29,6 +32,7 @@ class AuthRepository {
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // ─── Convenience Getters ─────────────────────────────────────────────────
 
@@ -53,19 +57,30 @@ class AuthRepository {
       try {
         // 1️⃣ Try to fetch fresh profile from Firestore server.
         return await _fetchProfile(firebaseUser.uid);
+      } on ProfileNotFoundException {
+        return UserModel(
+          uid: firebaseUser.uid,
+          name: firebaseUser.displayName ?? '',
+          email: firebaseUser.email ?? '',
+          phone: firebaseUser.phoneNumber ?? '',
+          role: UserRole.resident,
+          isOnboardingPending: true,
+        );
       } on AuthException {
         // Profile not yet created (e.g. mid-signup race) — return null.
         return null;
       } on FirebaseException catch (e) {
         if (e.code == 'unavailable') {
           // 2️⃣ Firestore is offline — try the local cache first.
-          debugPrint('[AuthRepository] Firestore offline, falling back to cache.');
+          debugPrint(
+              '[AuthRepository] Firestore offline, falling back to cache.');
           try {
             return await _fetchProfile(firebaseUser.uid, preferCache: true);
           } catch (_) {
             // 3️⃣ No cache either — build a minimal UserModel from the Auth
             //    token so the user is not kicked back to the login screen.
-            debugPrint('[AuthRepository] No cache. Building fallback UserModel from Auth token.');
+            debugPrint(
+                '[AuthRepository] No cache. Building fallback UserModel from Auth token.');
             return UserModel(
               uid: firebaseUser.uid,
               name: firebaseUser.displayName ?? '',
@@ -97,6 +112,7 @@ class AuthRepository {
     required String password,
     required UserRole role,
     String? apartmentId,
+    String? apartmentName,
   }) async {
     late UserCredential credential;
 
@@ -113,17 +129,37 @@ class AuthRepository {
 
     final uid = credential.user!.uid;
 
+    String? resolvedApartmentId = apartmentId;
+    final shouldCreateAdminApartment = role == UserRole.admin;
+
+    if (!shouldCreateAdminApartment &&
+        (resolvedApartmentId == null || resolvedApartmentId.isEmpty)) {
+      throw const MissingApartmentSelectionException();
+    }
+
+    if (shouldCreateAdminApartment &&
+        (apartmentName == null || apartmentName.trim().isEmpty)) {
+      throw const MissingApartmentNameException();
+    }
+
     final profile = UserModel(
       uid: uid,
       name: name.trim(),
       email: email.trim(),
       phone: phone.trim(),
       role: role,
-      apartmentId: apartmentId,
+      apartmentId: shouldCreateAdminApartment ? null : resolvedApartmentId,
+      isApproved: role == UserRole.admin,
     );
 
     try {
       await _writeProfile(profile);
+
+      if (shouldCreateAdminApartment) {
+        final adminApartmentId = await createApartment(apartmentName!.trim());
+        await _userDocRef(uid).update({'apartmentId': adminApartmentId});
+        return profile.copyWith(apartmentId: adminApartmentId);
+      }
     } catch (_) {
       // Roll back: delete the orphaned Auth account so the user can retry.
       await credential.user?.delete().catchError((_) {});
@@ -164,11 +200,189 @@ class AuthRepository {
     }
   }
 
+  Future<UserModel> signInWithGoogle({
+    UserRole? role,
+    String? name,
+    String? apartmentId,
+    String? apartmentName,
+    String? phone,
+    String? flatNumber,
+    String? buildingName,
+    bool createIfMissing = false,
+  }) async {
+    UserCredential credential;
+
+    try {
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider();
+        credential = await _auth.signInWithPopup(provider);
+      } else {
+        final googleUser = await _googleSignIn.signIn();
+        if (googleUser == null) {
+          throw const GoogleSignInCancelledException();
+        }
+        final googleAuth = await googleUser.authentication;
+        final authCredential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        credential = await _auth.signInWithCredential(authCredential);
+      }
+    } on AuthException {
+      rethrow;
+    } on PlatformException catch (e) {
+      final message = e.message ?? '';
+      if (e.code == 'sign_in_failed' && message.contains('ApiException: 10')) {
+        throw const GoogleSignInConfigurationException();
+      }
+      throw UnknownAuthException(message.isEmpty ? e.toString() : message);
+    } on FirebaseAuthException catch (e) {
+      throw _mapFirebaseAuthException(e);
+    } catch (e) {
+      throw UnknownAuthException(e.toString());
+    }
+
+    final firebaseUser = credential.user;
+    if (firebaseUser == null) {
+      throw const UnknownAuthException('Google login failed. Please retry.');
+    }
+
+    try {
+      return await _fetchProfile(firebaseUser.uid);
+    } on ProfileNotFoundException {
+      if (!createIfMissing || role == null) {
+        throw const ProfileSetupRequiredException();
+      }
+
+      String? resolvedApartmentId = apartmentId;
+      final shouldCreateAdminApartment = role == UserRole.admin;
+      final requiresAddressDetails = role == UserRole.resident;
+
+      if (!shouldCreateAdminApartment &&
+          (resolvedApartmentId == null || resolvedApartmentId.isEmpty)) {
+        throw const MissingApartmentSelectionException();
+      }
+
+      if (!shouldCreateAdminApartment &&
+          (phone == null || phone.trim().isEmpty)) {
+        throw const MissingResidentGuardDetailsException();
+      }
+
+      if (requiresAddressDetails &&
+          ((flatNumber == null || flatNumber.trim().isEmpty) ||
+              (buildingName == null || buildingName.trim().isEmpty))) {
+        throw const MissingResidentGuardDetailsException();
+      }
+
+      if (shouldCreateAdminApartment &&
+          (apartmentName == null || apartmentName.trim().isEmpty)) {
+        throw const MissingApartmentNameException();
+      }
+
+      final profile = UserModel(
+        uid: firebaseUser.uid,
+        name: (name != null && name.trim().isNotEmpty)
+            ? name.trim()
+            : (firebaseUser.displayName ?? ''),
+        email: firebaseUser.email ?? '',
+        phone: shouldCreateAdminApartment
+            ? (firebaseUser.phoneNumber ?? '')
+            : phone!.trim(),
+        flatNumber: requiresAddressDetails ? flatNumber!.trim() : null,
+        buildingName: requiresAddressDetails ? buildingName!.trim() : null,
+        role: role,
+        apartmentId: shouldCreateAdminApartment ? null : resolvedApartmentId,
+        isApproved: role == UserRole.admin,
+      );
+      await _writeProfile(profile);
+
+      if (shouldCreateAdminApartment) {
+        final adminApartmentId = await createApartment(apartmentName!.trim());
+        await _userDocRef(firebaseUser.uid)
+            .update({'apartmentId': adminApartmentId});
+        return profile.copyWith(apartmentId: adminApartmentId);
+      }
+
+      return profile;
+    }
+  }
+
+  Future<UserModel> createProfileForCurrentOAuthUser({
+    required UserRole role,
+    String? name,
+    String? apartmentId,
+    String? apartmentName,
+    String? phone,
+    String? flatNumber,
+    String? buildingName,
+  }) async {
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser == null) {
+      throw const SessionExpiredException();
+    }
+
+    String? resolvedApartmentId = apartmentId;
+    final shouldCreateAdminApartment = role == UserRole.admin;
+    final requiresAddressDetails = role == UserRole.resident;
+
+    if (!shouldCreateAdminApartment &&
+        (resolvedApartmentId == null || resolvedApartmentId.isEmpty)) {
+      throw const MissingApartmentSelectionException();
+    }
+
+    if (!shouldCreateAdminApartment &&
+        (phone == null || phone.trim().isEmpty)) {
+      throw const MissingResidentGuardDetailsException();
+    }
+
+    if (requiresAddressDetails &&
+        ((flatNumber == null || flatNumber.trim().isEmpty) ||
+            (buildingName == null || buildingName.trim().isEmpty))) {
+      throw const MissingResidentGuardDetailsException();
+    }
+
+    if (shouldCreateAdminApartment &&
+        (apartmentName == null || apartmentName.trim().isEmpty)) {
+      throw const MissingApartmentNameException();
+    }
+
+    final profile = UserModel(
+      uid: firebaseUser.uid,
+      name: (name != null && name.trim().isNotEmpty)
+          ? name.trim()
+          : (firebaseUser.displayName ?? ''),
+      email: firebaseUser.email ?? '',
+      phone: shouldCreateAdminApartment
+          ? (firebaseUser.phoneNumber ?? '')
+          : phone!.trim(),
+      flatNumber: requiresAddressDetails ? flatNumber!.trim() : null,
+      buildingName: requiresAddressDetails ? buildingName!.trim() : null,
+      role: role,
+      apartmentId: shouldCreateAdminApartment ? null : resolvedApartmentId,
+      isApproved: role == UserRole.admin,
+      isOnboardingPending: false,
+    );
+
+    await _writeProfile(profile);
+
+    if (shouldCreateAdminApartment) {
+      final adminApartmentId = await createApartment(apartmentName!.trim());
+      await _userDocRef(firebaseUser.uid)
+          .update({'apartmentId': adminApartmentId});
+      return profile.copyWith(apartmentId: adminApartmentId);
+    }
+
+    return profile;
+  }
+
   // ─── Sign Out ────────────────────────────────────────────────────────────
 
   /// Signs the current user out of Firebase Auth.
   Future<void> signOut() async {
     try {
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
       await _auth.signOut();
     } catch (e) {
       debugPrint('[AuthRepository] signOut error: $e');
@@ -206,13 +420,46 @@ class AuthRepository {
     }
   }
 
+  Future<void> updateResidentGuardDetails({
+    required String uid,
+    required String phone,
+    required String flatNumber,
+    required String buildingName,
+  }) async {
+    await _userDocRef(uid).update({
+      'phone': phone.trim(),
+      'flatNumber': flatNumber.trim(),
+      'buildingName': buildingName.trim(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<List<ApartmentModel>> getAvailableApartments() async {
+    final snap =
+        await _firestore.collection('apartments').orderBy('name').get();
+
+    return snap.docs
+        .map((doc) => ApartmentModel.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
+  Future<String> createApartment(String name) async {
+    final apartmentRef = _firestore.collection('apartments').doc();
+    await apartmentRef.set({
+      'name': name,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return apartmentRef.id;
+  }
+
   // ─── Private Helpers ─────────────────────────────────────────────────────
 
   /// Reads the Firestore profile document for [uid].
   ///
   /// If [preferCache] is true, reads from local Firestore cache rather than
   /// the remote server. Used as a fallback when the device is offline.
-  Future<UserModel> _fetchProfile(String uid, {bool preferCache = false}) async {
+  Future<UserModel> _fetchProfile(String uid,
+      {bool preferCache = false}) async {
     final snapshot = await _userDocRef(uid).get(
       preferCache ? const GetOptions(source: Source.cache) : null,
     );
@@ -229,7 +476,8 @@ class AuthRepository {
 
   /// Converts a [FirebaseAuthException] into a domain [AuthException].
   AuthException _mapFirebaseAuthException(FirebaseAuthException e) {
-    debugPrint('[AuthRepository] FirebaseAuthException: ${e.code} — ${e.message}');
+    debugPrint(
+        '[AuthRepository] FirebaseAuthException: ${e.code} — ${e.message}');
     switch (e.code) {
       case 'email-already-in-use':
         return const EmailAlreadyInUseException();
