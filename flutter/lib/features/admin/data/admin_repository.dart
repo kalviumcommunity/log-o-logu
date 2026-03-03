@@ -2,6 +2,55 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+class PendingApprovalUser {
+  final String uid;
+  final String name;
+  final String email;
+  final String phone;
+  final String? flatNumber;
+  final String? buildingName;
+  final String role;
+  final String? apartmentId;
+
+  const PendingApprovalUser({
+    required this.uid,
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.flatNumber,
+    required this.buildingName,
+    required this.role,
+    required this.apartmentId,
+  });
+
+  factory PendingApprovalUser.fromMap(String uid, Map<String, dynamic> map) {
+    return PendingApprovalUser(
+      uid: uid,
+      name: map['name'] as String? ?? 'Unknown',
+      email: map['email'] as String? ?? 'No email',
+      phone: map['phone'] as String? ?? '',
+      flatNumber: map['flatNumber'] as String?,
+      buildingName: map['buildingName'] as String?,
+      role: map['role'] as String? ?? 'resident',
+      apartmentId: map['apartmentId'] as String?,
+    );
+  }
+}
+
+class AdminApartment {
+  final String id;
+  final String name;
+
+  const AdminApartment({required this.id, required this.name});
+
+  factory AdminApartment.fromMap(String id, Map<String, dynamic> map) {
+    return AdminApartment(
+      id: id,
+      name: map['name'] as String? ?? '',
+    );
+  }
+}
+
 class AdminMetrics {
   final int totalResidents;
   final int pendingApprovals;
@@ -53,8 +102,9 @@ class AdminRepository {
       // Pending approvals proxy: users with no apartmentId assigned
       final pending = usersSnap.docs
           .where((doc) =>
-              doc.data()['role'] == 'resident' &&
-              doc.data()['apartmentId'] == null)
+              (doc.data()['role'] == 'resident' ||
+                  doc.data()['role'] == 'guard') &&
+              doc.data()['isApproved'] == false)
           .length;
 
       // Visitors Today and Currently Inside would come from logs
@@ -90,5 +140,42 @@ class AdminRepository {
         totalGuards: guards,
       );
     });
+  }
+
+  Stream<List<PendingApprovalUser>> pendingUsersStream() {
+    return _firestore
+        .collection('users')
+        .where('isApproved', isEqualTo: false)
+        .where('role', whereIn: ['resident', 'guard'])
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => PendingApprovalUser.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
+  }
+
+  Future<void> approveUser(String uid) {
+    return _firestore.collection('users').doc(uid).update({
+      'isApproved': true,
+      'approvedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<List<AdminApartment>> apartmentsStream() {
+    return _firestore.collection('apartments').orderBy('name').snapshots().map(
+          (snapshot) => snapshot.docs
+              .map((doc) => AdminApartment.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
+  }
+
+  Future<String> createApartment(String name) async {
+    final doc = _firestore.collection('apartments').doc();
+    await doc.set({
+      'name': name,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return doc.id;
   }
 }
