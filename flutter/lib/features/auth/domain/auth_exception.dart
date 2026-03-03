@@ -40,8 +40,7 @@ final class WeakPasswordException extends AuthException {
 
 /// The supplied email string is badly formatted.
 final class InvalidEmailException extends AuthException {
-  const InvalidEmailException()
-      : super('Please enter a valid email address.');
+  const InvalidEmailException() : super('Please enter a valid email address.');
 }
 
 // ─── Session / Token Errors ───────────────────────────────────────────────────
@@ -72,6 +71,38 @@ final class ProfileNotFoundException extends AuthException {
 final class ProfileCreationException extends AuthException {
   const ProfileCreationException()
       : super('Failed to create user profile. Please try again.');
+}
+
+final class MissingApartmentSelectionException extends AuthException {
+  const MissingApartmentSelectionException()
+      : super('Please select an apartment to continue.');
+}
+
+final class MissingResidentGuardDetailsException extends AuthException {
+  const MissingResidentGuardDetailsException()
+      : super('Please provide flat number, building name, and phone number.');
+}
+
+final class MissingApartmentNameException extends AuthException {
+  const MissingApartmentNameException()
+      : super('Please enter apartment name to continue.');
+}
+
+final class GoogleSignInCancelledException extends AuthException {
+  const GoogleSignInCancelledException()
+      : super('Google sign-in was cancelled.');
+}
+
+final class GoogleSignInConfigurationException extends AuthException {
+  const GoogleSignInConfigurationException()
+      : super(
+          'Google sign-in is not configured correctly for this app build. Please add your app SHA-1/SHA-256 in Firebase project settings, download updated google-services.json, and rebuild the app.',
+        );
+}
+
+final class ProfileSetupRequiredException extends AuthException {
+  const ProfileSetupRequiredException()
+      : super('Complete registration first to set role and apartment.');
 }
 
 // ─── General / Unknown ────────────────────────────────────────────────────────
