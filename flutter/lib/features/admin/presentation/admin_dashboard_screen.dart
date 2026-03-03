@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'components/components.dart';
+import 'package:go_router/go_router.dart';
+import 'package:log_o_logu/core/router/app_router.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -10,6 +12,13 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _selectedIndex = 0;
+
+  void _handleFeatureTap(String featureName) {
+    if (featureName == 'Pending Approvals' ||
+        featureName == 'Resident Management') {
+      context.push(AppRoutes.adminApprovals);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,9 +41,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     switch (_selectedIndex) {
       case 0:
         return HomeContent(
-          onFeatureTap: (featureName) {
-            // Handle feature taps if needed
-          },
+          onFeatureTap: _handleFeatureTap,
         );
       case 1:
         return const ResidentsContent();
@@ -44,9 +51,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         return const SettingsContent();
       default:
         return HomeContent(
-          onFeatureTap: (featureName) {
-            // Handle feature taps if needed
-          },
+          onFeatureTap: _handleFeatureTap,
         );
     }
   }
