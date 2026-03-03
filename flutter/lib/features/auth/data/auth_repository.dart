@@ -51,52 +51,79 @@ class AuthRepository {
   /// Firebase SDK handles token refresh automatically every ~1 hour.
   /// This stream fires on every refresh so the app always has a valid token.
   Stream<UserModel?> get authStateStream {
-    return _auth.idTokenChanges().asyncMap((firebaseUser) async {
-      if (firebaseUser == null) return null;
+    late StreamController<UserModel?> controller;
+    StreamSubscription<User?>? authSub;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? profileSub;
 
-      try {
-        // 1️⃣ Try to fetch fresh profile from Firestore server.
-        return await _fetchProfile(firebaseUser.uid);
-      } on ProfileNotFoundException {
-        return UserModel(
-          uid: firebaseUser.uid,
-          name: firebaseUser.displayName ?? '',
-          email: firebaseUser.email ?? '',
-          phone: firebaseUser.phoneNumber ?? '',
-          role: UserRole.resident,
-          isOnboardingPending: true,
-        );
-      } on AuthException {
-        // Profile not yet created (e.g. mid-signup race) — return null.
-        return null;
-      } on FirebaseException catch (e) {
-        if (e.code == 'unavailable') {
-          // 2️⃣ Firestore is offline — try the local cache first.
-          debugPrint(
-              '[AuthRepository] Firestore offline, falling back to cache.');
+    Future<void> bindProfile(User firebaseUser) async {
+      await profileSub?.cancel();
+      profileSub = _userDocRef(firebaseUser.uid)
+          .snapshots(includeMetadataChanges: true)
+          .listen(
+        (snapshot) {
+          final data = snapshot.data();
+          if (!snapshot.exists || data == null) {
+            controller.add(
+              UserModel(
+                uid: firebaseUser.uid,
+                name: firebaseUser.displayName ?? '',
+                email: firebaseUser.email ?? '',
+                phone: firebaseUser.phoneNumber ?? '',
+                role: UserRole.resident,
+                isOnboardingPending: true,
+              ),
+            );
+            return;
+          }
+
+          controller.add(UserModel.fromMap(data));
+        },
+        onError: (Object error) async {
+          debugPrint('[AuthRepository] profile stream error: $error');
           try {
-            return await _fetchProfile(firebaseUser.uid, preferCache: true);
+            final cachedProfile =
+                await _fetchProfile(firebaseUser.uid, preferCache: true);
+            controller.add(cachedProfile);
           } catch (_) {
-            // 3️⃣ No cache either — build a minimal UserModel from the Auth
-            //    token so the user is not kicked back to the login screen.
-            debugPrint(
-                '[AuthRepository] No cache. Building fallback UserModel from Auth token.');
-            return UserModel(
-              uid: firebaseUser.uid,
-              name: firebaseUser.displayName ?? '',
-              email: firebaseUser.email ?? '',
-              phone: firebaseUser.phoneNumber ?? '',
-              role: UserRole.resident,
+            controller.add(
+              UserModel(
+                uid: firebaseUser.uid,
+                name: firebaseUser.displayName ?? '',
+                email: firebaseUser.email ?? '',
+                phone: firebaseUser.phoneNumber ?? '',
+                role: UserRole.resident,
+              ),
             );
           }
-        }
-        debugPrint('[AuthRepository] authStateStream FirebaseException: $e');
-        return null;
-      } catch (e) {
-        debugPrint('[AuthRepository] authStateStream error: $e');
-        return null;
-      }
-    });
+        },
+      );
+    }
+
+    controller = StreamController<UserModel?>(
+      onListen: () {
+        authSub = _auth.authStateChanges().listen(
+          (firebaseUser) async {
+            if (firebaseUser == null) {
+              await profileSub?.cancel();
+              profileSub = null;
+              controller.add(null);
+              return;
+            }
+            await bindProfile(firebaseUser);
+          },
+          onError: (Object error) {
+            debugPrint('[AuthRepository] auth stream error: $error');
+            controller.add(null);
+          },
+        );
+      },
+      onCancel: () async {
+        await profileSub?.cancel();
+        await authSub?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   // ─── Sign Up ─────────────────────────────────────────────────────────────
