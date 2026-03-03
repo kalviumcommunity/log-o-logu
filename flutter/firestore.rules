@@ -26,16 +26,42 @@ service cloud.firestore {
       // Allow reading specific profiles.
       allow get: if isOwner(userId) || isAdmin();
       
-      // Allow listing for seeding/admin checks.
-      allow list: if request.auth != null;
+      // Allow listing for admin checks.
+      allow list: if request.auth != null && isAdmin();
 
-      // Allow registration (write own profile) and Admin edits.
-      allow write: if isOwner(userId) || isAdmin();
+      // Registration: users can create only their own profile.
+      allow create: if isOwner(userId)
+                    && (
+                      request.resource.data.role == 'admin'
+                      || (
+                        request.resource.data.role == 'guard'
+                        && request.resource.data.isApproved == false
+                        && request.resource.data.phone is string
+                        && request.resource.data.phone.size() > 0
+                      )
+                      || (
+                        request.resource.data.role == 'resident'
+                        && request.resource.data.isApproved == false
+                        && request.resource.data.phone is string
+                        && request.resource.data.phone.size() > 0
+                        && request.resource.data.flatNumber is string
+                        && request.resource.data.flatNumber.size() > 0
+                        && request.resource.data.buildingName is string
+                        && request.resource.data.buildingName.size() > 0
+                      )
+                    );
+
+      // Users can update only their own basic profile details, not approval.
+      allow update: if (isOwner(userId)
+                    && request.resource.data.isApproved == resource.data.isApproved)
+                    || isAdmin();
+
+      allow delete: if isAdmin();
     }
 
     // ─── /apartments ─────────────────────────────────────────────────────────
     match /apartments/{apartmentId} {
-      allow read:  if request.auth != null;
+      allow read:  if true;
       allow write: if isAdmin();
     }
 
