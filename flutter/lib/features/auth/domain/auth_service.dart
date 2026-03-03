@@ -16,6 +16,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:log_o_logu/features/auth/domain/apartment_model.dart';
 import 'package:log_o_logu/features/auth/data/auth_repository.dart';
 import 'package:log_o_logu/features/auth/domain/auth_exception.dart';
 import 'package:log_o_logu/features/auth/domain/user_model.dart';
@@ -61,7 +62,7 @@ class AuthService extends ChangeNotifier {
 
   /// Convenience helpers.
   bool get isAuthenticated => _status == AuthStatus.authenticated;
-  bool get isInitializing  => _status == AuthStatus.initializing;
+  bool get isInitializing => _status == AuthStatus.initializing;
 
   // ─── Token Stream Subscription ────────────────────────────────────────────
 
@@ -114,6 +115,7 @@ class AuthService extends ChangeNotifier {
     required String password,
     required UserRole role,
     String? apartmentId,
+    String? apartmentName,
   }) async {
     _setLoading(true);
     _clearError();
@@ -126,6 +128,7 @@ class AuthService extends ChangeNotifier {
         password: password,
         role: role,
         apartmentId: apartmentId,
+        apartmentName: apartmentName,
       );
       // The auth stream will emit and call _onAuthStateChanged automatically.
       // We return the UserModel here so the UI can act immediately.
@@ -153,6 +156,70 @@ class AuthService extends ChangeNotifier {
         email: email,
         password: password,
       );
+      return user;
+    } on AuthException catch (e) {
+      _setError(e);
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<UserModel> signInWithGoogle({
+    UserRole? role,
+    String? name,
+    String? apartmentId,
+    String? apartmentName,
+    String? phone,
+    String? flatNumber,
+    String? buildingName,
+    bool createIfMissing = false,
+  }) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      return await _repository.signInWithGoogle(
+        role: role,
+        name: name,
+        apartmentId: apartmentId,
+        apartmentName: apartmentName,
+        phone: phone,
+        flatNumber: flatNumber,
+        buildingName: buildingName,
+        createIfMissing: createIfMissing,
+      );
+    } on AuthException catch (e) {
+      _setError(e);
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<UserModel> completeOAuthOnboarding({
+    required UserRole role,
+    String? name,
+    String? apartmentId,
+    String? apartmentName,
+    String? phone,
+    String? flatNumber,
+    String? buildingName,
+  }) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final user = await _repository.createProfileForCurrentOAuthUser(
+        role: role,
+        name: name,
+        apartmentId: apartmentId,
+        apartmentName: apartmentName,
+        phone: phone,
+        flatNumber: flatNumber,
+        buildingName: buildingName,
+      );
+      _updateState(user: user, status: AuthStatus.authenticated);
       return user;
     } on AuthException catch (e) {
       _setError(e);
@@ -193,6 +260,47 @@ class AuthService extends ChangeNotifier {
     final uid = _currentUser?.uid;
     if (uid == null) return;
     await _repository.updateFcmToken(uid, fcmToken);
+  }
+
+  Future<List<ApartmentModel>> getAvailableApartments() {
+    return _repository.getAvailableApartments();
+  }
+
+  Future<void> completeResidentGuardProfile({
+    required String phone,
+    required String flatNumber,
+    required String buildingName,
+  }) async {
+    final uid = _currentUser?.uid;
+    if (uid == null) return;
+
+    _setLoading(true);
+    _clearError();
+
+    try {
+      await _repository.updateResidentGuardDetails(
+        uid: uid,
+        phone: phone,
+        flatNumber: flatNumber,
+        buildingName: buildingName,
+      );
+
+      final updatedUser = _currentUser?.copyWith(
+        phone: phone.trim(),
+        flatNumber: flatNumber.trim(),
+        buildingName: buildingName.trim(),
+      );
+
+      _updateState(
+        user: updatedUser,
+        status: AuthStatus.authenticated,
+      );
+    } on AuthException catch (e) {
+      _setError(e);
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
   }
 
   // ─── Route Guard Helpers ──────────────────────────────────────────────────
