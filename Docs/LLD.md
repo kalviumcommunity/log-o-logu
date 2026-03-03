@@ -1,165 +1,188 @@
 # Low-Level Design (LLD) - Log-o-logu
 
-## 1. System Components & Architecture
+This LLD aligns with the current HLD, database design, and Firebase API specification.
 
-### 1.1 Flutter App Architecture (Clean Architecture)
-The application will follow a feature-first modular structure to ensure scalability and maintainability.
+## 1. Architecture & Module Design
 
+### 1.1 Runtime Architecture
+- **Client:** Flutter app (role-based UX for `admin`, `resident`, `guard`).
+- **Auth:** Firebase Auth with Google OAuth.
+- **Data plane:** Direct Firestore SDK operations from client apps.
+- **Async backend:** Cloud Functions for event-driven tasks only (notifications + invite expiry).
+- **Critical gate logic:** Firestore transaction in Guard app (`5-Second Gate`) for atomic validation.
+
+### 1.2 Feature Modules (Flutter)
 ```text
 lib/
 ├── core/
-│   ├── constants/        # App constants, styling, API keys
-│   ├── utils/            # Validators, formatters, helpers
-│   ├── theme/            # Theme data
-│   └── common_widgets/   # Reusable UI components
+│   ├── auth/                 # Auth wrappers, current-user bootstrap
+│   ├── routing/              # Role/state based route guards
+│   ├── firestore/            # Shared query helpers + converters
+│   └── utils/                # Validation, date/time, qr payload helpers
 ├── features/
-│   ├── auth/             # Login, Registration, Password Reset
-│   ├── invites/          # (Resident) QR Generation, Guest List
-│   ├── validation/       # (Guard) QR Scanner, Entry Log
-│   ├── dashboard/        # (Admin) Analytics, Live Occupancy
-│   └── profile/          # User settings
-├── data/                 # Repositories & Data Sources
-│   ├── datasources/      # Firestore, Firebase Auth interfaces
-│   └── models/           # DTOs (Data Transfer Objects)
-└── domain/               # Business Logic & Entities
-    ├── entities/         # Domain models
-    └── repositories/     # Repository interfaces
+│   ├── onboarding/           # Invite code join + profile completion
+│   ├── waiting_room/         # Realtime approval listener
+│   ├── admin/
+│   │   ├── apartment_setup/  # Create apartment + inviteCode
+│   │   ├── approvals/        # Approve/Reject users in apartment
+│   │   └── dashboard/        # Occupancy and logs
+│   ├── resident/
+│   │   ├── invites/          # Create/cancel invite + QR display
+│   │   └── history/          # Personal visitor history
+│   └── guard/
+│       ├── scanner/          # QR scan + transaction validation
+│       ├── manual_entry/     # Unplanned service entry (no invite)
+│       └── exit_logging/     # Update exitTime
+└── shared/
+    ├── models/               # Firestore models
+    └── widgets/              # Shared widgets (loading, errors, list items)
 ```
 
----
+### 1.3 User State Machine
+On login, app resolves route using `users/{uid}`:
+1. `isOnboardingPending == true` → Onboarding flow.
+2. `isOnboardingPending == false && isApproved == false` → Waiting Room.
+3. `isApproved == true` → Role dashboard.
 
-## 2. Detailed Database Schema (Cloud Firestore)
+## 2. Firestore Data Model (Source of Truth)
 
-### 2.1 `users` (Collection)
-| Field | Type | Description |
+### 2.1 `apartments` collection
+Document ID: auto-generated apartment ID.
+
+| Field | Type | Notes |
 | :--- | :--- | :--- |
-| `uid` | String (PK) | Firebase Auth UID |
-| `name` | String | Full name |
-| `email` | String | Email address |
-| `phone` | String | Verified phone number |
-| `role` | Enum | `resident` \| `guard` \| `admin` |
-| `apartmentId` | String (FK) | ID of the specific apartment complex |
-| `fcmToken` | String | Device token for push notifications |
-| `createdAt` | Timestamp | Account creation time |
+| `name` | String | Community name |
+| `adminUid` | String | Creator/admin UID |
+| `inviteCode` | String | 6-character join code, unique per apartment |
+| `createdAt` | Timestamp | Creation timestamp |
 
-### 2.2 `apartments` (Collection)
-| Field | Type | Description |
+### 2.2 `users` collection
+Document ID: Firebase Auth UID.
+
+| Field | Type | Notes |
 | :--- | :--- | :--- |
-| `id` | String (PK) | Unique Apartment ID |
-| `name` | String | Name of the complex |
-| `address` | String | Detailed address |
-| `config` | Map | `{ "geofencing": true, "radius": 1000 }` |
-| `location` | Geopoint | Latitude/Longitude of main gate |
+| `uid` | String | Same as document ID |
+| `apartmentId` | String | Tenant boundary key |
+| `role` | String | `admin` \| `resident` \| `guard` |
+| `name` | String | Display name |
+| `email` | String | Email |
+| `phone` | String | Phone number |
+| `buildingName` | String\|Null | Tower/building for resident/guard context |
+| `flatNumber` | String\|Null | Flat/unit identifier |
+| `fcmToken` | String\|Null | Notification target |
+| `isApproved` | Boolean | Access gate controlled by admin |
+| `isOnboardingPending` | Boolean | Whether profile setup is complete |
 
-### 2.3 `invites` (Collection)
-| Field | Type | Description |
+### 2.3 `invites` collection
+Document ID: auto-generated invite ID (also used as QR payload).
+
+| Field | Type | Notes |
 | :--- | :--- | :--- |
-| `inviteId` | String (PK) | Unique ID for QR |
-| `residentUid` | String (FK) | Inviting resident |
-| `guestName` | String | Name of guest |
-| `guestPhone` | String | Phone of guest |
-| `validFrom` | Timestamp | Start validity |
-| `validUntil` | Timestamp | Expiry validity |
-| `status` | String | `pending` \| `approved` \| `used` \| `expired` \| `cancelled` |
-| `type` | String | `one-time` \| `multi-entry` \| `service` |
-| `qrCode` | String | Base64 or URL to QR (typically just `inviteId` string) |
+| `apartmentId` | String | Tenant boundary key |
+| `residentUid` | String | Invite owner |
+| `guestName` | String | Visitor label |
+| `purpose` | String | Example: `delivery`, `guest` |
+| `status` | String | `active` \| `used` \| `cancelled` \| `expired` |
+| `validFrom` | Timestamp | Start of validity window |
+| `validUntil` | Timestamp | End of validity window |
+| `buildingName` | String | Denormalized from resident profile |
+| `flatNumber` | String | Denormalized from resident profile |
 
-### 2.4 `logs` (Collection)
-| Field | Type | Description |
+### 2.4 `logs` collection
+Document ID: auto-generated log ID.
+
+| Field | Type | Notes |
 | :--- | :--- | :--- |
-| `logId` | String (PK) | Auto-generated |
-| `inviteId` | String (FK) | Reference to invite (if applicable) |
-| `residentUid` | String (FK) | Resident being visited |
-| `guardUid` | String (FK) | Guard who validated entry |
-| `entryTime` | Timestamp | Timestamp of entry |
-| `exitTime` | Timestamp | Timestamp of exit (null if active) |
-| `visitorDetails` | Map | `{ "name": "...", "phone": "..." }` |
-| `status` | String | `active` \| `completed` |
+| `apartmentId` | String | Tenant boundary key |
+| `inviteId` | String\|Null | `null` for manual service entry |
+| `residentUid` | String | Resident being visited |
+| `scannedByGuardUid` | String | Guard operator UID |
+| `guestName` | String | Copied from invite/manual input |
+| `entryTime` | Timestamp | Entry timestamp |
+| `exitTime` | Timestamp\|Null | Set when visitor exits |
+| `buildingName` | String | Denormalized location context |
+| `flatNumber` | String | Denormalized location context |
 
----
+## 3. API-Level Operations (Firestore SDK)
 
-## 3. Cloud Functions (Logic Layer)
+### 3.1 Authentication
+- `signInWithGoogle()` returns `uid`, `email`, `displayName`.
 
-### 3.1 `validateInvite` (onCall)
-- **Input**: `inviteId`, `guardUid`
-- **Logic**:
-    1. Fetch invite from Firestore.
-    2. Check if `status == "pending"` or `"approved"`.
-    3. Verify `now` is between `validFrom` and `validUntil`.
-    4. Verify guard's `apartmentId` matches invite's apartment (if applicable).
-- **Return**: `{ success: boolean, data?: InviteData, error?: string }`
+### 3.2 Apartment Operations
+- **Create Apartment (admin):** write `apartments` doc with `name`, `adminUid`, `inviteCode`, `createdAt`.
+- **Join Apartment:** query `apartments.where("inviteCode", "==", code).limit(1)`.
 
-### 3.2 `processEntry` (onCall)
-- **Input**: `inviteId`, `guardUid`, `visitorPhotoUrl` (optional)
-- **Logic**:
-    1. Transaction: Update `invite.status = "used"`.
-    2. Create `logs` document with `entryTime = now` and `status = "active"`.
-    3. Trigger `sendNotification` to `residentUid`.
-- **Return**: `logId`
+### 3.3 User Operations
+- **Complete onboarding:** update `users/{uid}` with apartment + profile + role + pending/approval flags.
+- **Waiting room stream:** watch `users/{uid}` for `isApproved` transition to `true`.
+- **Approve user (admin):** update `users/{targetUid}` with `isApproved: true`.
 
-### 3.3 `geoFenceExit` (Firestore Trigger / onCall)
-- **Input**: `userId` (Resident/Guest) or `logId`
-- **Logic**: 
-    - If GPS detects exit from radius, update `logs` where `status == "active"` with `exitTime = now`.
-    - Mark log as `completed`.
+### 3.4 Invite Operations
+- **Create invite (resident):** write `invites` with denormalized `buildingName` and `flatNumber`.
+- **Cancel invite (resident):** set `status = "cancelled"` if not already used/expired.
 
----
+### 3.5 Gate Operations
+- **QR validation (guard):** Firestore transaction:
+  1. Read `invites/{inviteId}`.
+  2. Validate `status == "active"` and `validUntil > now`.
+  3. Update invite `status = "used"`.
+  4. Create `logs` document with `entryTime`, `exitTime: null`.
+- **Manual service entry (guard):** create `logs` with `inviteId: null`.
+- **Exit logging (guard):** update `logs/{logId}` with `exitTime`.
 
-## 4. UI/UX Component Breakdown
+## 4. Cloud Functions (Event-Driven Only)
 
-### 4.1 Resident App Widgets
-- `InviteQRCodeCard`: Display generated QR with sharing button (WhatsApp/SMS).
-- `ActivityListTile`: Shows real-time status of current and past visitors.
-- `InviteSummaryModal`: Bottom sheet to quickly approve/deny a "knock" (service entry).
+### 4.1 `onLogCreated` (FCM Push)
+- **Trigger:** Firestore `logs` document create.
+- **Flow:** read `residentUid` → fetch `users/{residentUid}.fcmToken` → send FCM.
+- **Payload:** title `Visitor Arrived`, body `{guestName} has entered the gate.`
 
-### 4.2 Guard App Widgets
-- `QRScannerOverlay`: Custom implementation using `mobile_scanner` with a scanning window.
-- `ValidationResultDialog`: Color-coded feedback (Green: Pass, Red: Fail, Yellow: Requires Manual Approval).
-- `ActiveVisitorsGrid`: Dashboard showing who is currently "Inside".
+### 4.2 `expireStaleInvites` (Scheduled)
+- **Trigger:** Cloud Scheduler every 15 minutes.
+- **Flow:** query `invites` where `status == "active" && validUntil < now` → batch update to `expired`.
+- **Guarantee:** Security still enforced by client-side transaction checks, even if scheduler is delayed.
 
----
+## 5. Security Rules Contract (Implementation Guidance)
 
-## 5. Security & Privacy Implementation
+Rules must enforce:
+1. All operations require authenticated user.
+2. User can access only documents within same `apartmentId` tenant boundary.
+3. `isApproved == true` required for operational reads/writes outside onboarding setup.
+4. Resident can create/manage own invites; guard can read invite for scan path only.
+5. Guard can create logs and update `exitTime`; cannot mutate historical immutable fields.
+6. Admin can approve users only within admin’s apartment.
 
-### 5.1 Firestore Security Rules
-```javascript
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Residents can read/write their own invites
-    match /invites/{inviteId} {
-      allow read, write: if request.auth.uid == resource.data.residentUid;
-      allow read: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'guard';
-    }
-    
-    // Guards can create logs but not edit them after creation
-    match /logs/{logId} {
-      allow create: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'guard';
-      allow read: if request.auth.uid == resource.data.residentUid || 
-                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-  }
-}
-```
+## 6. Key Flows (Sequence-Level)
 
----
+### 6.1 Planned Guest Entry (`5-Second Gate`)
+1. Resident creates invite.
+2. Visitor presents QR (payload = `inviteId`).
+3. Guard scans QR and runs transaction.
+4. On success, invite becomes `used` and log is created atomically.
+5. `onLogCreated` function sends push to resident.
 
-## 6. Sequence Diagrams (Logic Flow)
+### 6.2 Unplanned Service Entry
+1. Guard enters service name and resident flat.
+2. App writes direct `logs` record (`inviteId: null`).
+3. `onLogCreated` sends resident push notification.
 
-### 6.1 Guest Entry Flow
-1. **Visitor** shows QR to **Guard**.
-2. **Guard App** calls `validateInvite` Cloud Function.
-3. **Cloud Function** returns success after checking DB.
-4. **Guard App** calls `processEntry`.
-5. **Backend** updates DB and sends **Push Notification** to **Resident**.
-6. **Resident App** displays: "Your guest [Name] has entered the complex."
+### 6.3 New User Onboarding & Approval
+1. User signs in and enters apartment invite code.
+2. App writes/updates user profile with `isOnboardingPending: false`, `isApproved: false`.
+3. Admin sees pending users filtered by `apartmentId` + `isApproved == false`.
+4. Admin approves user; waiting-room listener routes user to dashboard.
 
----
+## 7. Edge Cases & Failure Handling
 
-## 7. Edge Case Handling (Technical)
-
-| Scenario | Resolution |
+| Scenario | Handling |
 | :--- | :--- |
-| **Offline Validation** | Use Firestore's offline persistence for recently fetched invites; sync logs immediately when network returns. |
-| **QR Screenshot Reuse** | Use "Time-based OTP" embedded in QR or mark as `used` in DB instantly on first scan. |
-| **Guest phone mismatch** | Guard app prompts for manual verification if phone scanned doesn't match invite record. |
-| **GPS Jitter (GeoFence)** | Implement a debounce (e.g., must be out of bounds for 3 minutes) before auto-logging exit. |
+| Double scan race | Firestore transaction allows only first successful commit; second fails as `status != active`. |
+| Expired invite | Guard receives immediate deny if `validUntil <= now`, regardless of cron status. |
+| Network failure at gate | QR validation needs internet; app should show manual fallback for service entry path. |
+| Missing FCM token | Log write still succeeds; notification function no-ops with retry-safe logging. |
+
+## 8. Non-Functional Design Targets
+
+- QR validation completes in under 1 second under normal network conditions.
+- Admin and guard views use denormalized fields to avoid client-side joins.
+- Data model scales across apartments through strict `apartmentId` partitioning.

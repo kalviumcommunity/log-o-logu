@@ -1,122 +1,114 @@
-# High-Level Design (HLD) - Log-o-logu
+# Updated High-Level Design (HLD) - Log-o-logu
+
+Here is the revised HLD built from first principles. It incorporates the NoSQL denormalization strategy, the multi-tenant onboarding flow, and the optimized transaction logic for the "5-Second Gate" rule.
 
 ## 🟢 R — Requirements
+
 The system must:
-- Replace manual visitor logs with digital logging
-- Support Pre-Approved QR Guest Invite system
-- Support Service Partner quick-entry validation
-- Provide Admin live dashboard (occupancy tracking)
-- Enable real-time notifications
-- Log entry and exit timestamps automatically
-- Maintain secure, searchable records
-- Ensure privacy and data protection
-- Be scalable for multiple apartments
+
+* **New:** Support Multi-Tenant architecture (Multiple apartments with unique 6-character invite codes).
+* **New:** Enforce a strict "Waiting Room" approval state machine for new users.
+* Replace manual visitor logs with digital logging.
+* Support Pre-Approved QR Guest Invite system.
+* Support Service Partner quick-entry validation (unplanned visitors).
+* Provide Admin live dashboard (zero client-side joins for instant loading).
+* Enable real-time push notifications.
+* Log entry and exit timestamps automatically.
 
 ## 🟢 T — Technical Stack
-| Layer | Technology |
-| :--- | :--- |
-| **Frontend** | Flutter (Dart) |
-| **Authentication** | Firebase Auth |
-| **Database** | Firestore |
-| **Backend Logic** | Firebase Cloud Functions |
-| **Notifications** | Firebase Cloud Messaging (FCM) |
-| **QR Handling** | Flutter QR Scanner Library |
-| **Geo-Fencing** | Flutter Geolocator |
-| **UI Design** | Figma |
-| **Maps** | Google Maps SDK |
+
+| Layer | Technology | First Principle Purpose |
+| --- | --- | --- |
+| **Frontend** | Flutter (Dart) | Single codebase, rapid UI building. |
+| **Authentication** | Firebase Auth | Google OAuth identity verification. |
+| **Database** | Firestore (NoSQL) | Denormalized data for single-read dashboard loads. |
+| **Core Logic** | Firestore Transactions | Atomic client-side validation (< 500ms) to prevent double-scans. |
+| **Async Backend** | Cloud Functions | Background tasks (Push notifications, scheduled expiry). |
+| **Notifications** | FCM | Asynchronous alerts to residents. |
+| **QR Handling** | `mobile_scanner` | Fast, on-device QR string extraction. |
 
 ## 🟢 C — Components
 
 ### 1️⃣ Resident Mobile App
-- Create guest invite
-- Generate QR Code
-- Approve / deny visitors
-- View visitor history
+
+* Complete onboarding (Select apartment, enter flat number).
+* Wait for Admin approval (Listening state).
+* Create pre-approved guest invites (QR generation).
+* View personal visitor history.
 
 ### 2️⃣ Guard App
-- Scan QR codes
-- Validate delivery agents
-- View active visitors
-- Manually override entry (admin-only)
+
+* Scan QR codes (Transaction-based instant validation).
+* Process unplanned Service Entry (Direct log writing).
+* Manually log visitor exits.
 
 ### 3️⃣ Admin Dashboard
-- View live occupancy
-- Filter logs
-- Export records
-- Manage residents & guards
+
+* Create Apartment & generate `inviteCode`.
+* Approve/Reject pending Resident and Guard access requests.
+* View live community occupancy and historical logs.
 
 ### 4️⃣ Firebase Backend
-- **Firebase Auth**: Role-based authentication (Resident, Guard, Admin).
-- **Firestore Database**: Stores Users, Invites, Logs, Service sessions.
-- **Cloud Functions**: Validate QR, Trigger notifications, Auto-expire invites, Handle exit detection.
-- **Firebase Cloud Messaging**: Push approval requests, Alert suspicious activity.
+
+* **Firestore DB:** `apartments`, `users`, `invites`, `logs`.
+* **Cloud Functions:** 1. Trigger FCM push notifications on new `logs` document.
+2. Cron job to auto-expire old `invites`.
+* **Security Rules:** Enforce `isApproved == true` for read/write access.
 
 ## 🟢 R — Responsibilities (Module Breakdown)
 
-### 2️⃣ Module Architecture
-**Mobile App (Flutter)**
-- Authentication Module
-- Invite Module
-- QR Module
-- GeoFence Module
-- Notification Module
+#### 🔐 3.1 Authentication & State Module
 
-**Backend (Firebase)**
-- Auth Service
-- Firestore DB
-- Cloud Functions
-- FCM Service
+* **Responsibilities:** Identity validation, multi-tenant routing, state machine execution.
+* **State Logic:** - `isOnboardingPending == true` ➔ Route to Setup Screen.
+* `isApproved == false` ➔ Route to Waiting Room.
+* `isApproved == true` ➔ Route to Main Dashboard.
 
-**Admin Web Panel**
 
-### 3️⃣ Detailed Module Description
-
-#### 🔐 3.1 Authentication Module
-- **Responsibilities**: Register/Login users, Role validation, Token management.
-- **Interfaces**: `FirebaseAuth.signIn()`, `FirebaseAuth.createUser()`.
-- **Edge Cases**: 
-    - Invalid credentials -> Show error.
-    - Expired token -> Auto re-login.
-    - Role mismatch -> Block access.
 
 #### 🎟 3.2 Guest Invite Module
-- **Responsibilities**: Generate unique invite ID, Generate QR Code, Store invite in Firestore.
-- **Data Structure**: `Invite { inviteId, residentId, guestName, phoneNumber, validFrom, validUntil, status }`.
-- **Flow**: Resident → Create Invite → Firestore → QR Generated → Sent via WhatsApp.
 
-#### 📷 3.3 QR Validation Module
-- **Responsibilities**: Scan QR, Send inviteId to Cloud Function, Validate existence/expiry/usage.
-- **Validation Logic**: `if invite.exists AND invite.validUntil > now AND invite.status == Approved: logEntry(); notifyResident(); else: denyEntry();`
+* **Responsibilities:** Generate unique time-limited document, convert ID to QR.
+* **Data Structure:** `invites` collection includes denormalized `buildingName` and `flatNumber` for instant Guard UI rendering.
 
-#### 📍 3.4 GeoFence Module (Optional Enhancement)
-- **Responsibilities**: Detect entry within 1KM radius, Auto-log exit when outside boundary.
-- **Libraries**: `geolocator`, `Google Maps SDK`.
+#### ⚡ 3.3 QR Validation Module (Optimized)
+
+* **Responsibilities:** Extract QR payload, run atomic transaction, grant/deny access.
+* **Validation Logic (Client-Side Transaction):** `Read Invite ➔ Check Expiry & Status ➔ If Valid: Update Status to 'used' + Write to Logs ➔ Show Green Screen.`
+
+#### 📦 3.4 Service Entry Module (Unplanned)
+
+* **Responsibilities:** Handle delivery agents without QR codes.
+* **Logic:** Guard manually inputs name/company. Bypasses `invites` collection entirely. Writes directly to `logs` collection with `inviteId: null`.
 
 #### 🔔 3.5 Notification Module
-- **Uses**: Firebase Cloud Messaging.
-- **Triggers**: Guest arrival, Delivery partner entry, Exit confirmation, Suspicious attempt.
+
+* **Responsibilities:** Alert residents securely.
+* **Trigger:** Cloud function watches the `logs` collection. When a new log appears, it finds the `fcmToken` of the `residentUid` and sends the push.
 
 ## 📊 4. Data Flow Documentation
 
-### 4.1 Guest Entry Flow
-Resident App → Create Invite → Firestore → QR Generated → Visitor shows QR → Guard scans → Cloud Function validates → Entry Log stored → FCM notifies Resident.
+### 4.1 Planned Guest Flow (The 5-Second Gate)
 
-### 4.2 Delivery Partner Flow
-Guard selects "Service Entry" → Capture Name/Order ID → Temporary Session Created → Entry Logged → Exit Scan → Session Closed.
+1. **Resident App:** Creates `invite` document ➔ Generates QR.
+2. **Visitor:** Shows QR at the gate.
+3. **Guard App:** Scans QR ➔ Executes Firestore Transaction ➔ Verifies & Writes `log` document.
+4. **Backend:** Cloud Function detects new `log` ➔ Sends FCM push to Resident.
 
-### 4.3 Exit Flow (GeoFence Enabled)
-User leaves 1KM radius → GeoFence Trigger → Cloud Function updates exitTime → Session Closed.
+### 4.2 Unplanned Delivery Flow
+
+1. **Visitor:** Arrives without QR.
+2. **Guard App:** Enters "Swiggy" & selects Flat A-123 ➔ Writes directly to `log`.
+3. **Backend:** Cloud Function detects new `log` ➔ Sends FCM push to Resident: *"Swiggy is at the gate."*
 
 ## 🚨 6. Edge Case & Failure Handling
-- **Network Failure**: Use local cache, retry sync.
-- **QR Reuse**: Mark as "Used", deny second scan.
-- **Expired Invite**: Deny entry, notify resident.
-- **Multiple Guards**: Use Firestore transaction locking.
-- **Battery Saver**: Fallback to QR-based exit.
+
+* **Double Scan / QR Reuse:** Firestore Transactions lock the document. If two guards scan exactly at the same time, the transaction ensures only one succeeds; the second gets "Already Used."
+* **Network Failure at Gate:** Firestore offline persistence caches the log, but real-time validation requires internet. Guard must use manual override if offline.
+* **Geo-Fencing Limitations:** Mobile OS kills background location tracking to save battery. Geo-fencing is removed from the critical exit flow. Exits must be manually logged by the Guard to prevent "ghost" occupancy.
 
 ## 🔟 Non-Functional Requirements
-- **Performance**: QR validation < 2 sec.
-- **Availability**: 99.9% uptime.
-- **Scalability**: Support 10,000+ users.
-- **Security**: Encrypted authentication.
-- **Reliability**: No data loss.
+
+* **Performance:** QR validation must execute in < 1 second using client-side transactions.
+* **Read Efficiency:** Dashboards must load in a single query (0 client-side joins).
+* **Scalability:** NoSQL structure supports unlimited apartments via the `apartmentId` index.
