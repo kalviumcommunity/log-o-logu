@@ -26,8 +26,8 @@ service cloud.firestore {
       // Allow reading specific profiles.
       allow get: if isOwner(userId) || isAdmin();
       
-      // Allow listing for admin checks.
-      allow list: if request.auth != null && isAdmin();
+      // Allow listing for admin and guard (resident directory).
+      allow list: if request.auth != null && (isAdmin() || isGuard());
 
       // Registration: users can create only their own profile.
       allow create: if isOwner(userId)
@@ -87,14 +87,14 @@ service cloud.firestore {
 
     // ─── /logs ───────────────────────────────────────────────────────────────
     match /logs/{logId} {
-      allow read:   if (isGuard()    && resource.data.guardUid    == request.auth.uid)
+      allow read:   if isGuard()
                     || (isResident() && resource.data.residentUid == request.auth.uid)
                     || isAdmin();
 
       allow create: if isGuard()
-                    && request.resource.data.guardUid == request.auth.uid;
+                    && request.resource.data.scannedByGuardUid == request.auth.uid;
 
-      allow update: if (isGuard() && resource.data.guardUid == request.auth.uid)
+      allow update: if isGuard()
                     || isAdmin();
 
       allow delete: if isAdmin();
