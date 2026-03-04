@@ -5,17 +5,48 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:log_o_logu/features/auth/domain/auth_service.dart';
-import 'package:log_o_logu/features/invite/domain/invite_service.dart';
-import 'package:log_o_logu/features/invite/domain/invite_model.dart';
+import 'package:log_o_logu/features/home/data/resident_dashboard_repository.dart';
 import 'package:log_o_logu/core/theme/app_theme.dart';
 
-class VisitorHistoryScreen extends StatelessWidget {
+class VisitorHistoryScreen extends StatefulWidget {
   const VisitorHistoryScreen({super.key});
 
   @override
+  State<VisitorHistoryScreen> createState() => _VisitorHistoryScreenState();
+}
+
+class _VisitorHistoryScreenState extends State<VisitorHistoryScreen> {
+  static final ResidentDashboardRepository _residentRepo =
+      ResidentDashboardRepository();
+
+  Stream<List<ResidentVisitorLog>>? _logsStream;
+  String? _cachedUid;
+  List<ResidentVisitorLog> _lastKnownLogs = const [];
+  bool _initialLoaded = false;
+
+  @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthService>().currentUser;
-    final inviteService = context.watch<InviteService>();
+    final residentUid = context.select<AuthService, String?>(
+      (auth) => auth.currentUser?.uid,
+    );
+
+    if (residentUid == null || residentUid.isEmpty) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'Resident profile not available.',
+            style: TextStyle(color: AppTheme.greyText),
+          ),
+        ),
+      );
+    }
+
+    if (_cachedUid != residentUid) {
+      _cachedUid = residentUid;
+      _initialLoaded = false;
+      _lastKnownLogs = const [];
+      _logsStream = _residentRepo.streamRecentVisitorLogs(residentUid, limit: 200);
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -37,69 +68,43 @@ class VisitorHistoryScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-            child: const TextField(
-              decoration: InputDecoration(
-                hintText: 'Search by name...',
-                prefixIcon: Icon(Icons.search, size: 20),
-                suffixIcon: Icon(Icons.filter_list_rounded, size: 20),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ),
-          
-          // Filter Chips
-          const SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-            child: Row(
-              children: [
-                _FilterChip(label: 'All Status', isSelected: true),
-                SizedBox(width: 8),
-                _FilterChip(label: 'Completed', isSelected: false),
-                SizedBox(width: 8),
-                _FilterChip(label: 'Today', isSelected: false),
-                SizedBox(width: 8),
-                _FilterChip(label: 'This Week', isSelected: false),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // History List
           Expanded(
-            child: StreamBuilder<List<InviteModel>>(
-              stream: inviteService.streamResidentInvites(user?.uid ?? ''),
+            child: StreamBuilder<List<ResidentVisitorLog>>(
+              stream: _logsStream,
               builder: (context, snapshot) {
-                final invites = snapshot.data ?? [];
-                
-                if (invites.isEmpty) {
+                if (snapshot.hasData) {
+                  _lastKnownLogs = snapshot.data!;
+                  _initialLoaded = true;
+                }
+
+                if (snapshot.hasError && !_initialLoaded) {
+                  debugPrint(
+                      '[VisitorHistory] logs stream error: ${snapshot.error}');
+                  _initialLoaded = true;
+                }
+
+                if (!_initialLoaded) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final logs = _lastKnownLogs;
+
+                if (logs.isEmpty) {
                   return const Center(
-                    child: Text('No visitor history found.', style: TextStyle(color: AppTheme.greyText)),
+                    child: Text(
+                      'No visitor history found.',
+                      style: TextStyle(color: AppTheme.greyText),
+                    ),
                   );
                 }
 
-                // In a real app, we would group these by date.
-                // For now, we'll just show them in a list with a mockup "TODAY" header.
-                return ListView(
+                return ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
-                    const _SectionHeader(title: 'TODAY'),
-                    ...invites.map((invite) => _HistoryListItem(invite: invite)),
-                    const SizedBox(height: 20),
-                    const _SectionHeader(title: 'YESTERDAY'),
-                    const _HistoryListItemMock(
-                      name: 'Robert Wilson',
-                      entry: '10:15 AM',
-                      exit: '04:45 PM',
-                    ),
-                    const SizedBox(height: 80), // Padding for nav bar
-                  ],
+                  itemCount: logs.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    return _HistoryListItem(log: logs[index]);
+                  },
                 );
               },
             ),
@@ -125,60 +130,10 @@ class VisitorHistoryScreen extends StatelessWidget {
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-
-  const _FilterChip({required this.label, required this.isSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: isSelected ? AppTheme.primaryBlue : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isSelected ? AppTheme.primaryBlue : Colors.grey.withValues(alpha: 0.1),
-        ),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: isSelected ? Colors.white : AppTheme.primaryBlack,
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  const _SectionHeader({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: AppTheme.greyText,
-          letterSpacing: 1.0,
-        ),
-      ),
-    );
-  }
-}
-
 class _HistoryListItem extends StatelessWidget {
-  final InviteModel invite;
+  final ResidentVisitorLog log;
 
-  const _HistoryListItem({required this.invite});
+  const _HistoryListItem({required this.log});
 
   @override
   Widget build(BuildContext context) {
@@ -207,97 +162,34 @@ class _HistoryListItem extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  invite.guestName,
+                  log.guestName,
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 Text(
-                  'Entry: ${DateFormat('hh:mm a').format(invite.validFrom)}',
+                  'Entry: ${DateFormat('MMM d, hh:mm a').format(log.entryTime)}',
                   style: const TextStyle(fontSize: 12, color: AppTheme.greyText),
                 ),
+                if (log.exitTime != null)
+                  Text(
+                    'Exit: ${DateFormat('MMM d, hh:mm a').format(log.exitTime!)}',
+                    style: const TextStyle(fontSize: 12, color: AppTheme.greyText),
+                  ),
               ],
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.05),
+              color: (log.isInside ? Colors.green : Colors.grey)
+                  .withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Text(
-              'COMPLETED',
+            child: Text(
+              log.isInside ? 'ENTERED' : 'COMPLETED',
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.greyText,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HistoryListItemMock extends StatelessWidget {
-  final String name;
-  final String entry;
-  final String exit;
-
-  const _HistoryListItemMock({required this.name, required this.entry, required this.exit});
-
-  @override
-  Widget build(BuildContext context) {
-     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.05)),
-      ),
-      child: Row(
-        children: [
-           Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppTheme.primaryBlue.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.person, color: AppTheme.primaryBlue, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                Text(
-                  'Entry: Today, $entry',
-                  style: const TextStyle(fontSize: 12, color: AppTheme.greyText),
-                ),
-                Text(
-                  'Exit: Today, $exit',
-                  style: const TextStyle(fontSize: 12, color: AppTheme.greyText),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Text(
-              'COMPLETED',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.greyText,
+                color: log.isInside ? Colors.green : AppTheme.greyText,
               ),
             ),
           ),
