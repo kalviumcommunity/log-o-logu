@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:log_o_logu/core/theme/app_theme.dart';
+import 'package:log_o_logu/features/auth/domain/auth_service.dart';
+import 'package:log_o_logu/features/home/data/guard_repository.dart';
 
 /// Directory tab — shows a searchable directory of residents.
 class GuardDirectoryTab extends StatefulWidget {
@@ -11,21 +14,13 @@ class GuardDirectoryTab extends StatefulWidget {
 
 class _GuardDirectoryTabState extends State<GuardDirectoryTab> {
   final _searchController = TextEditingController();
+  final GuardRepository _guardRepository = GuardRepository();
   String _query = '';
 
-  // Placeholder directory entries
-  final List<_DirectoryEntry> _entries = const [
-    _DirectoryEntry(
-        name: 'Aditya Sharma', flat: 'A-101', phone: '+91 98765 43210'),
-    _DirectoryEntry(
-        name: 'Priya Mehta', flat: 'A-102', phone: '+91 91234 56789'),
-    _DirectoryEntry(
-        name: 'Rohan Gupta', flat: 'B-201', phone: '+91 87654 32109'),
-    _DirectoryEntry(
-        name: 'Sneha Patel', flat: 'B-202', phone: '+91 76543 21098'),
-    _DirectoryEntry(
-        name: 'Vikram Joshi', flat: 'C-301', phone: '+91 65432 10987'),
-  ];
+  Stream<List<GuardResident>>? _directoryStream;
+  String? _cachedApartmentId;
+  List<GuardResident> _lastKnownResidents = const [];
+  bool _initialLoaded = false;
 
   @override
   void dispose() {
@@ -33,19 +28,29 @@ class _GuardDirectoryTabState extends State<GuardDirectoryTab> {
     super.dispose();
   }
 
-  List<_DirectoryEntry> get _filtered {
-    if (_query.isEmpty) return _entries;
-    final lower = _query.toLowerCase();
-    return _entries
-        .where((e) =>
-            e.name.toLowerCase().contains(lower) ||
-            e.flat.toLowerCase().contains(lower))
-        .toList();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered;
+    final apartmentId = context.select<AuthService, String?>(
+      (auth) => auth.currentUser?.apartmentId,
+    );
+
+    if (apartmentId == null || apartmentId.isEmpty) {
+      return const SafeArea(
+        child: Center(
+          child: Text(
+            'Apartment is not configured for this guard profile.',
+            style: TextStyle(color: AppTheme.greyText),
+          ),
+        ),
+      );
+    }
+
+    if (_cachedApartmentId != apartmentId) {
+      _cachedApartmentId = apartmentId;
+      _initialLoaded = false;
+      _lastKnownResidents = const [];
+      _directoryStream = _guardRepository.streamResidentDirectory(apartmentId);
+    }
 
     return SafeArea(
       child: Column(
@@ -91,69 +96,97 @@ class _GuardDirectoryTabState extends State<GuardDirectoryTab> {
             ),
           ),
           Expanded(
-            child: filtered.isEmpty
-                ? const Center(
+            child: StreamBuilder<List<GuardResident>>(
+              stream: _directoryStream,
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  _lastKnownResidents = snapshot.data!;
+                  _initialLoaded = true;
+                }
+                if (snapshot.hasError && !_initialLoaded) {
+                  debugPrint('[GuardDirectory] stream error: ${snapshot.error}');
+                  _initialLoaded = true;
+                }
+
+                if (!_initialLoaded) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final residents = _lastKnownResidents;
+                final lowerQuery = _query.toLowerCase();
+                final filtered = lowerQuery.isEmpty
+                    ? residents
+                    : residents
+                        .where(
+                          (resident) =>
+                              resident.name.toLowerCase().contains(lowerQuery) ||
+                              resident.unitLabel
+                                  .toLowerCase()
+                                  .contains(lowerQuery),
+                        )
+                        .toList();
+
+                if (filtered.isEmpty) {
+                  return const Center(
                     child: Text(
                       'No residents found',
                       style: TextStyle(color: AppTheme.greyText),
                     ),
-                  )
-                : ListView.separated(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final entry = filtered[index];
-                      return Card(
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor:
-                                AppTheme.primaryBlue.withValues(alpha: 0.12),
-                            child: Text(
-                              entry.name[0],
-                              style: const TextStyle(
-                                color: AppTheme.primaryBlue,
-                                fontWeight: FontWeight.w700,
-                              ),
+                  );
+                }
+
+                return ListView.separated(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final resident = filtered[index];
+                    final firstChar = resident.name.isEmpty
+                        ? 'R'
+                        : resident.name[0].toUpperCase();
+
+                    return Card(
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              AppTheme.primaryBlue.withValues(alpha: 0.12),
+                          child: Text(
+                            firstChar,
+                            style: const TextStyle(
+                              color: AppTheme.primaryBlue,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          title: Text(
-                            entry.name,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Text(entry.flat),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.phone_outlined,
-                                color: AppTheme.primaryBlue),
-                            tooltip: 'Call ${entry.name}',
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Calling ${entry.phone}…'),
-                                ),
-                              );
-                            },
-                          ),
                         ),
-                      );
-                    },
-                  ),
+                        title: Text(
+                          resident.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(resident.unitLabel),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.phone_outlined,
+                              color: AppTheme.primaryBlue),
+                          tooltip: 'Call ${resident.name}',
+                          onPressed: () {
+                            final phone = resident.phone.trim();
+                            final content = phone.isEmpty
+                                ? 'Phone not available for ${resident.name}'
+                                : 'Phone: $phone';
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(content)),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
-}
-
-class _DirectoryEntry {
-  final String name;
-  final String flat;
-  final String phone;
-
-  const _DirectoryEntry({
-    required this.name,
-    required this.flat,
-    required this.phone,
-  });
 }

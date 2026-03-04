@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:log_o_logu/features/auth/domain/auth_service.dart';
+import 'package:log_o_logu/features/auth/domain/user_model.dart';
 import 'package:log_o_logu/core/theme/app_theme.dart';
 
 /// Profile tab for the guard — shows guard info and a logout button.
@@ -9,7 +10,9 @@ class GuardProfileTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthService>().currentUser;
+    final user = context.select<AuthService, UserModel?>(
+      (auth) => auth.currentUser,
+    );
     final auth = context.read<AuthService>();
 
     return SafeArea(
