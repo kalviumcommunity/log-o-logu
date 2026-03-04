@@ -67,11 +67,13 @@ class _CreateInviteScreenState extends State<CreateInviteScreen> {
 
     final authService = context.read<AuthService>();
     final inviteService = context.read<InviteService>();
-    final residentUid = authService.currentUser?.uid;
+    final currentUser = authService.currentUser;
+    final residentUid = currentUser?.uid;
+    final apartmentId = currentUser?.apartmentId;
 
-    if (residentUid == null) {
+    if (residentUid == null || apartmentId == null || apartmentId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not authenticated')),
+        const SnackBar(content: Text('Resident profile is incomplete')),
       );
       return;
     }
@@ -79,10 +81,15 @@ class _CreateInviteScreenState extends State<CreateInviteScreen> {
     try {
       final inviteId = await inviteService.createGuestInvite(
         residentUid: residentUid,
+        apartmentId: apartmentId,
         guestName: _nameController.text.trim(),
         guestPhone: _phoneController.text.trim(),
+        purpose: 'guest',
+        buildingName: currentUser?.buildingName,
+        flatNumber: currentUser?.flatNumber,
         validFrom: _validFrom,
         validUntil: _validTo,
+        notifyOnArrival: _notifyOnArrival,
       ).timeout(const Duration(seconds: 10), onTimeout: () {
         throw 'Operation timed out. Please check your internet connection.';
       });
@@ -90,11 +97,15 @@ class _CreateInviteScreenState extends State<CreateInviteScreen> {
       if (inviteId != null && mounted) {
         final invite = InviteModel(
           inviteId: inviteId,
+          apartmentId: apartmentId,
           residentUid: residentUid,
           guestName: _nameController.text.trim(),
           guestPhone: _phoneController.text.trim(),
+          purpose: 'guest',
           validFrom: _validFrom,
           validUntil: _validTo,
+          buildingName: currentUser?.buildingName,
+          flatNumber: currentUser?.flatNumber,
         );
 
         Navigator.of(context).push(

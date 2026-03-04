@@ -31,11 +31,16 @@ class InviteService extends ChangeNotifier {
   /// Creates a new guest invite and returns the generated inviteId.
   Future<String?> createGuestInvite({
     required String residentUid,
+    required String apartmentId,
     required String guestName,
     required String guestPhone,
+    String purpose = 'guest',
+    String? buildingName,
+    String? flatNumber,
     DateTime? validFrom,
     DateTime? validUntil,
     String type = 'one-time',
+    bool notifyOnArrival = true,
   }) async {
     _setLoading(true);
     _setError(null);
@@ -46,13 +51,18 @@ class InviteService extends ChangeNotifier {
       
       final invite = InviteModel(
         inviteId: inviteId,
+        apartmentId: apartmentId,
         residentUid: residentUid,
         guestName: guestName,
         guestPhone: guestPhone,
+        purpose: purpose,
         validFrom: validFrom ?? now,
         validUntil: validUntil ?? now.add(const Duration(hours: 24)),
-        status: InviteStatus.pending,
+        buildingName: buildingName,
+        flatNumber: flatNumber,
+        status: InviteStatus.active,
         type: type,
+        notifyOnArrival: notifyOnArrival,
       );
 
       await _repository.createInvite(invite);
@@ -78,6 +88,21 @@ class InviteService extends ChangeNotifier {
   /// Fetches invite details by invite ID for guard validation.
   Future<InviteModel?> getInviteById(String inviteId) {
     return _repository.getInvite(inviteId);
+  }
+
+  /// Cancels an active or pending invite.
+  Future<bool> cancelInvite(String inviteId) async {
+    _setLoading(true);
+    _setError(null);
+    try {
+      await _repository.cancelInvite(inviteId);
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      return false;
+    } finally {
+      _setLoading(false);
+    }
   }
 
   void clearError() {
